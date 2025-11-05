@@ -1,5 +1,6 @@
 /*
  * options.c - implementation of command-line parsing for Perlin generator.
+ *
  */
 
 /*
@@ -32,8 +33,10 @@
 #include <time.h>
 #include <fcntl.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <ctype.h>
 
 /* Allowed formats - canonical lowercase list */
 static const char *allowed_formats[] = { "png", "raw", "csv", "ppm", NULL };
@@ -73,6 +76,8 @@ static void print_usage(FILE *out, const char *progname) {
         "\n",
         progname);
 }
+
+
 
 /* lowercase inplace */
 static void to_lower_inplace(char *s) {
@@ -347,4 +352,30 @@ int parse_program_options(int argc, char **argv, ProgramOptions *out) {
 
     /* all good */
     return 0;
+}
+
+void print_program_options(ProgramOptions opts) {
+    if (opts.verbose) {
+        printf("\n");
+        printf("              .__                                         .___       \n");
+        printf("  ____   ____ |__| _________.__.           ____  __ __  __| _/____   \n");
+        printf(" /    \\ /  _ \\|  |/  ___<   |  |  ______ _/ ___\\|  |  \\/ __ |\\__  \\  \n");
+        printf("|   |  (  <_> )  |\\___ \\ \\___  | /_____/ \\  \\___|  |  / /_/ | / __ \\_\n");
+        printf("|___|  /\\____/|__/____  >/ ____|          \\___  >____/\\____ |(____  /\n");
+        printf("     \\/               \\/ \\/                   \\/           \\/     \\/ \n");
+        printf("\n");
+
+        fprintf(stderr, "Configuration (strict):\n");
+        fprintf(stderr, "  Size:        %d x %d\n", opts.width, opts.height);
+        fprintf(stderr, "  Octaves:     %d\n", opts.octaves);
+        fprintf(stderr, "  Format:      %s\n", opts.format);
+        fprintf(stderr, "  Output file: %s\n", opts.output_filename);
+        fprintf(stderr, "  Backend:     %s\n", opts.cpu_mode ? "CPU (forced)" : "CUDA (default)");
+        if (opts.seed_provided) {
+            fprintf(stderr, "  Seed:        %" PRIu64 " (provided)\n", opts.seed);
+        } else {
+            fprintf(stderr, "  Seed:        %" PRIu64 " (auto-generated)\n", opts.seed);
+        }
+        fprintf(stderr, "  Verbose:     enabled\n");
+    }
 }

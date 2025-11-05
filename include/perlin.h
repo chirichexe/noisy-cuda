@@ -1,5 +1,5 @@
 /*
- * cuda_runner.h - header file for cuda runner
+ * perlin.h - header file for perlin noise generator
  *
  */
 
@@ -19,16 +19,16 @@
  * limitations under the License.
  */
 
-#ifndef CUDA_RUNNER_H
-#define CUDA_RUNNER_H
+#ifndef PERLIN_H
+#define PERLIN_H
 
 #include "options.h"
 
 /**
- * @brief Run the program using CUDA backend
+ * @brief generate perlin noise
  * @param opts Program options
  * @return 0 on success, error code on failure
  */
-int run_on_cuda(const ProgramOptions *opts);
+int generate_perlin(const ProgramOptions *opts);
 
-#endif // CUDA_RUNNER_H
+#endif // PERLIN_H

@@ -27,10 +27,10 @@ __global__ void simple_print_kernel(int num_threads) {
     int thread_id = blockIdx.x * blockDim.x + threadIdx.x;
     
     // Only print from first few threads to avoid clutter
-    if (thread_id < 10) {
+    //if (thread_id < 10) {
         printf("Hello from CUDA! I'm thread %d (block %d, thread %d) of %d total threads\n", 
                thread_id, blockIdx.x, threadIdx.x, num_threads);
-    }
+    //}
     
     // Thread 0 prints a summary
     if (thread_id == 0) {

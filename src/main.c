@@ -1,8 +1,6 @@
 /*
  * main.c - common main function
  *
- * Davide Chirichella, Filippo Giulietti
- * Alma Mater Studiorum - University of Bologna
  */
 
 /*
@@ -20,15 +18,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#define _POSIX_C_SOURCE 200809L
-
 #include "options.h"
 #include <stdio.h>
-#include <stdlib.h>
-#include <inttypes.h>
-
-#include <cuda_runner.h>
+#include <perlin.h>
 
 int main(int argc, char **argv) {
     ProgramOptions opts;
@@ -43,38 +35,11 @@ int main(int argc, char **argv) {
     }
 
     /* Strict summary when verbose */
-    if (opts.verbose) {
-        fprintf(stderr, "Configuration (strict):\n");
-        fprintf(stderr, "  Size:        %d x %d\n", opts.width, opts.height);
-        fprintf(stderr, "  Octaves:     %d\n", opts.octaves);
-        fprintf(stderr, "  Format:      %s\n", opts.format);
-        fprintf(stderr, "  Output file: %s\n", opts.output_filename);
-        fprintf(stderr, "  Backend:     %s\n", opts.cpu_mode ? "CPU (forced)" : "CUDA (default)");
-        if (opts.seed_provided) {
-            fprintf(stderr, "  Seed:        %" PRIu64 " (provided)\n", opts.seed);
-        } else {
-            fprintf(stderr, "  Seed:        %" PRIu64 " (auto-generated)\n", opts.seed);
-        }
-        fprintf(stderr, "  Verbose:     enabled\n");
-    } else {
-        fprintf(stderr, "Configuration accepted. Use --verbose for details.\n");
-    }
+    print_program_options(opts);
 
-    // test run cuda
-    run_on_cuda(&opts);
-    // end test run cuda
-
-    /* Delegation point -- do not implement heavy work in this translation unit.
-     * Example (commented):
-     *
-     * if (opts.cpu_mode) {
-     *     return run_on_cpu(&opts);
-     * } else {
-     *     return run_on_cuda(&opts);
-     * }
-     *
-     * Implement run_on_cpu/run_on_cuda in separate modules and link at build time.
-     */
+    /* program starts */
+    generate_perlin(&opts);
+    /* program ends */
 
     return 0;
 }

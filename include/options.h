@@ -55,6 +55,12 @@ typedef struct {
  *     seed (unsigned integer). It also accepts --seed/-S long/short form.
  *   - If both positional seed and --seed are provided, parser fails (ambiguous).
  */
+
 int parse_program_options(int argc, char **argv, ProgramOptions *out);
+
+/*
+* If verbose, prints the given program options
+*/
+void print_program_options( ProgramOptions opts );
 
 #endif

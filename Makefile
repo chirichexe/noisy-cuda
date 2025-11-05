@@ -5,7 +5,7 @@ INC_DIR := include
 TARGET := $(BUILD_DIR)/main
 
 # Source files (extendable in the future)
-C_SOURCES := $(SRC_DIR)/main.c $(SRC_DIR)/options.c $(SRC_DIR)/cuda_runner.c
+C_SOURCES := $(SRC_DIR)/main.c $(SRC_DIR)/options.c $(SRC_DIR)/perlin.c
 CUDA_SOURCES := $(SRC_DIR)/cuda_kernel.cu
 
 # Object files
