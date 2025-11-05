@@ -25,7 +25,6 @@
 #include <curand_kernel.h>
 
 
-
 #define CHECK(call) \
 { \
     const cudaError_t error = call; \
@@ -40,16 +39,16 @@
 
 __global__ void gpu_generate_perlin_pixel(unsigned char* output, int seed, unsigned int width, unsigned int height) {
 
-    printf("seed in kernel: %d\n", seed);
-    printf("width in kernel: %d\n", width);
-    printf("height in kernel: %d\n", height);
+    //printf("seed in kernel: %d\n", seed);
+    //printf("width in kernel: %d\n", width);
+    //printf("height in kernel: %d\n", height);
 
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
 
     if (x >= width || y >= height) return;
 
-    int idx = y * width + x;
+    size_t idx = y * width + x;
 
     curandState state;
     curand_init(seed, idx, 0, &state);
@@ -59,35 +58,25 @@ __global__ void gpu_generate_perlin_pixel(unsigned char* output, int seed, unsig
 
 
 int gpu_generate_perlin(ProgramOptions *opts, unsigned char* output) {
-    unsigned char* d_output;
-
-    // Simple kernel configuration
-    int num_threads = opts->width * opts->height;
-    int block_size = 256;
-    int grid_size = (num_threads + block_size - 1) / block_size;
-
-    // Allocate device memory for output
-    CHECK(cudaMalloc((void **)&d_output, sizeof(d_output)));
-
-    // Set up grid and block dimensions
-    dim3 block(255, 255);
+    /* calculate gpu kernel launch parameters */
+    size_t buffer_size = opts->width * opts->height * sizeof(unsigned char);
+    
+    dim3 block(16, 16);
     dim3 grid((opts->width + block.x - 1) / block.x, (opts->height + block.y - 1) / block.y);
-    
-    //printf("Kernel configuration: <<<%d blocks, %d threads>>>\n", grid_size, block_size);
-    
-    
-    // Launch the kernel
-    gpu_generate_perlin_pixel<<<grid_size, block_size>>>(d_output, opts->seed, opts->width, opts->height);
-    // simple_print_kernel<<<grid_size, block_size>>>(num_threads);
-    
-    // Wait for kernel to complete
-    cudaError_t err = cudaDeviceSynchronize();
-    if (err != cudaSuccess) {
-        fprintf(stderr, "CUDA kernel failed: %s\n", cudaGetErrorString(err));
-        return -1;
-    }
 
-    //CHECK(cudaMemcpy(d_input, h_input, imageSize, cudaMemcpyDeviceToHost));
+    /* allocate device memory for output */
+    unsigned char* d_output;
+    CHECK(cudaMalloc((void **)&d_output, buffer_size));
+    
+    /* Launch the kernel */
+    gpu_generate_perlin_pixel<<<grid, block>>>(d_output, opts->seed, opts->width, opts->height);
+
+    /* Wait for kernel to complete */
+    CHECK(cudaDeviceSynchronize());
+   
+    /* copy and free the result from the device to the output pointer */
+    CHECK(cudaMemcpy(output, d_output, buffer_size, cudaMemcpyDeviceToHost));
+    CHECK(cudaFree(d_output));
     
     printf("CUDA kernel completed successfully!\n");
     return 0;

@@ -1,5 +1,5 @@
 /*
- * cuda_kernel.h - header file for cuda kernel
+ * [PROG_NAME].c - [PROG_USAGE]
  *
  */
 
@@ -20,22 +20,19 @@
  */
 
 #include "options.h"
-#ifndef GPU_GENERATE_PERLIN_H
-#define GPU_GENERATE_PERLIN_H
+#include <stdlib.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
-/**
- * @brief generate perlin noise on GPU
- * @param num_threads Number of threads to launch
- * @return 0 on success, error code on failure
- */
-int gpu_generate_perlin(ProgramOptions *opts, unsigned char* output);
+int cpu_generate_perlin(ProgramOptions *opts, unsigned char* output){
+    /* applying the seed on the C pseudorandomicity rand() function */
+    srand(opts->seed);
+    
+    /* randomize the image */
+    for(int y = 0; y < opts->height; y++){
+        for(int x = 0; x < opts->width; x++){
+            output[y * opts->width + x] = (unsigned char)(rand() * 255);
+        }
+    }
 
-#ifdef __cplusplus
+    return 0;
 }
-#endif
-
-#endif // GPU_GENERATE_PERLIN_H

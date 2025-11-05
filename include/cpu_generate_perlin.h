@@ -1,5 +1,5 @@
 /*
- * cuda_kernel.h - header file for cuda kernel
+ * perlin.h - header file for perlin noise generator
  *
  */
 
@@ -19,23 +19,16 @@
  * limitations under the License.
  */
 
-#include "options.h"
-#ifndef GPU_GENERATE_PERLIN_H
-#define GPU_GENERATE_PERLIN_H
+#ifndef CPU_GENERATE_PERLIN
+#define CPU_GENERATE_PERLIN
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "options.h"
 
 /**
- * @brief generate perlin noise on GPU
- * @param num_threads Number of threads to launch
+ * @brief generate perlin noise on CPU
+ * @param opts Program options
  * @return 0 on success, error code on failure
  */
-int gpu_generate_perlin(ProgramOptions *opts, unsigned char* output);
+int cpu_generate_perlin(ProgramOptions *opts, unsigned char* output );
 
-#ifdef __cplusplus
-}
-#endif
-
-#endif // GPU_GENERATE_PERLIN_H
+#endif // CPU_GENERATE_PERLIN

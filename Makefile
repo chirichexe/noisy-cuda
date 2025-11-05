@@ -5,7 +5,7 @@ INC_DIR := include
 TARGET := $(BUILD_DIR)/main
 
 # Source files (extendable in the future)
-C_SOURCES := $(SRC_DIR)/main.c $(SRC_DIR)/options.c $(SRC_DIR)/perlin.c
+C_SOURCES := $(SRC_DIR)/main.c $(SRC_DIR)/options.c $(SRC_DIR)/perlin.c $(SRC_DIR)/utils.c $(SRC_DIR)/cpu_generate_perlin.c
 CUDA_SOURCES := $(SRC_DIR)/gpu_generate_perlin.cu
 
 # Object files
