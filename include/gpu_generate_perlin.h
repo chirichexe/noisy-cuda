@@ -19,8 +19,9 @@
  * limitations under the License.
  */
 
-#ifndef CUDA_KERNEL_H
-#define CUDA_KERNEL_H
+#include "options.h"
+#ifndef GPU_GENERATE_PERLIN_H
+#define GPU_GENERATE_PERLIN_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,10 +32,10 @@ extern "C" {
  * @param num_threads Number of threads to launch
  * @return 0 on success, error code on failure
  */
-int run_cuda_kernel(int num_threads);
+int gpu_generate_perlin(ProgramOptions *opts, unsigned char* output);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // CUDA_KERNEL_H
+#endif // GPU_GENERATE_PERLIN_H

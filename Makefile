@@ -6,7 +6,7 @@ TARGET := $(BUILD_DIR)/main
 
 # Source files (extendable in the future)
 C_SOURCES := $(SRC_DIR)/main.c $(SRC_DIR)/options.c $(SRC_DIR)/perlin.c
-CUDA_SOURCES := $(SRC_DIR)/cuda_kernel.cu
+CUDA_SOURCES := $(SRC_DIR)/gpu_generate_perlin.cu
 
 # Object files
 C_OBJECTS := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(C_SOURCES))
