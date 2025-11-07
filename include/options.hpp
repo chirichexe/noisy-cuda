@@ -1,5 +1,5 @@
 /*
- * cuda_kernel.h - header file for cuda kernel
+ * options.hpp - definition of Options struct
  *
  */
 
@@ -19,23 +19,19 @@
  * limitations under the License.
  */
 
-#include "options.h"
-#ifndef GPU_GENERATE_PERLIN_H
-#define GPU_GENERATE_PERLIN_H
+#pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include <string>
+#include <cstdint>
 
-/**
- * @brief generate perlin noise on GPU
- * @param num_threads Number of threads to launch
- * @return 0 on success, error code on failure
- */
-int gpu_generate_perlin(ProgramOptions *opts, unsigned char* output);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif // GPU_GENERATE_PERLIN_H
+struct Options {
+    int width = 0;
+    int height = 0;
+    int octaves = 1;
+    std::string format = "png";
+    std::string output_filename = "output.png";
+    bool verbose = false;
+    bool cpu_mode = false;
+    std::uint64_t seed = 0;
+    bool seed_provided = false;
+};

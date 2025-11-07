@@ -1,5 +1,5 @@
 /*
- * utils.c - a bunch of useful static functions
+ * cpp__perlin_noise.cpp - perlin noise: C++ implementation
  *
  */
 
@@ -19,3 +19,7 @@
  * limitations under the License.
  */
 
+#include "perlin_noise.hpp"
+
+void generate_perlin_noise(const Options& opts) {
+}

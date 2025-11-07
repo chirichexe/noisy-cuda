@@ -1,5 +1,5 @@
 /*
- * [PROG_NAME].c - [PROG_USAGE]
+ * main.cpp - main function of noisy-cuda
  *
  */
 
@@ -19,19 +19,25 @@
  * limitations under the License.
  */
 
-#include "options.h"
-#include <stdlib.h>
+#include "perlin_noise.hpp"
+#include "options.hpp"
+#include <iostream>
 
+Options parse_options(int argc, char** argv);
 
-int cpu_generate_perlin(ProgramOptions *opts, unsigned char* output){
-    /* applying the seed on the C pseudorandomicity rand() function */
-    srand(opts->seed);
-    
-    /* randomize the image */
-    for(int y = 0; y < opts->height; y++){
-        for(int x = 0; x < opts->width; x++){
-            output[y * opts->width + x] = (unsigned char)(rand() * 255);
-        }
+int main(int argc, char** argv) {
+
+    try {
+        Options opts = parse_options(argc, argv);
+
+        generate_perlin_noise(opts);
+        
+        std::cout << "Done!" << std::endl;
+        
+    } 
+    catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << ".\nFor more information, try '--help'." << '\n';
+        return 1;
     }
 
     return 0;

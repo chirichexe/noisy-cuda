@@ -1,5 +1,5 @@
 /*
- * perlin.h - header file for perlin noise generator
+ * simd__utils.cpp - SIMD utility functions
  *
  */
 
@@ -18,17 +18,3 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#ifndef CPU_GENERATE_PERLIN
-#define CPU_GENERATE_PERLIN
-
-#include "options.h"
-
-/**
- * @brief generate perlin noise on CPU
- * @param opts Program options
- * @return 0 on success, error code on failure
- */
-int cpu_generate_perlin(ProgramOptions *opts, unsigned char* output );
-
-#endif // CPU_GENERATE_PERLIN

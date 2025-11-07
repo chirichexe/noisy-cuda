@@ -1,9 +1,9 @@
 /*
- * utils.h - public interface for command-line parsing module.
+ * simd__perlin_noise.cpp - perlin noise: SIMD implementation
  *
  */
 
- /*
+/*
  * Copyright 2025 Davide Chirichella, Filippo Giulietti
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,24 +19,8 @@
  * limitations under the License.
  */
 
-#ifndef UTILS_H
-#define UTILS_H
+#include "perlin_noise.hpp"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#include <time.h>
-
-typedef struct {
-    char* label;
-    struct timespec clockStart, clockEnd;
-} Countdown;
-
-void performance_print(int ended, char* label);
-
-#ifdef __cplusplus
+void generate_perlin_noise(const Options& opts) {
+    
 }
-#endif
-
-#endif // UTILS_H

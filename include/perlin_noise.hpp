@@ -1,5 +1,5 @@
 /*
- * [PROG_NAME].c - [PROG_USAGE]
+ * perlin_noise.hpp - declaration of Perlin noise generation function
  *
  */
 
@@ -18,3 +18,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#pragma once
+#include "options.hpp"
+#include <vector>
+
+/**
+ * @brief generate_perlin_noise - generate Perlin noise based on provided options
+ * 
+ * @param opts the options for noise generation
+ * @return void
+ */
+void generate_perlin_noise(const Options& opts);

@@ -1,5 +1,5 @@
 /*
- * cuda_kernel.cu - specific run of a kernel CUDA implementation
+ * cuda__perlin_noise.cu - perlin noise: CUDA implementation
  *
  */
 
@@ -19,22 +19,12 @@
  * limitations under the License.
  */
 
-#include "gpu_generate_perlin.h"
+#include "perlin_noise.hpp"
+#include "cuda__utils.hpp"
+
 #include <cuda_runtime.h>
 #include <stdio.h>
 #include <curand_kernel.h>
-
-
-#define CHECK(call) \
-{ \
-    const cudaError_t error = call; \
-    if (error != cudaSuccess) \
-    { \
-        fprintf(stderr, "Error: %s:%d, ", __FILE__, __LINE__); \
-        fprintf(stderr, "code: %d, reason: %s\n", error, cudaGetErrorString(error)); \
-        exit(1); \
-    } \
-}
 
 
 __global__ void gpu_generate_perlin_pixel(unsigned char* output, int seed, unsigned int width, unsigned int height) {
@@ -53,31 +43,36 @@ __global__ void gpu_generate_perlin_pixel(unsigned char* output, int seed, unsig
     curandState state;
     curand_init(seed, idx, 0, &state);
     float val = curand_uniform(&state); // value in (0, 1]
+
     output[idx] = (unsigned char)(val * 255.0f);
 }
 
 
-int gpu_generate_perlin(ProgramOptions *opts, unsigned char* output) {
+void generate_perlin_noise(const Options& opts) {
+
+
     /* calculate gpu kernel launch parameters */
-    size_t buffer_size = opts->width * opts->height * sizeof(unsigned char);
+    size_t buffer_size = opts.width * opts.height * sizeof(unsigned char);
     
     dim3 block(16, 16);
-    dim3 grid((opts->width + block.x - 1) / block.x, (opts->height + block.y - 1) / block.y);
+    dim3 grid((opts.width + block.x - 1) / block.x, (opts.height + block.y - 1) / block.y);
 
     /* allocate device memory for output */
     unsigned char* d_output;
     CHECK(cudaMalloc((void **)&d_output, buffer_size));
     
     /* Launch the kernel */
-    gpu_generate_perlin_pixel<<<grid, block>>>(d_output, opts->seed, opts->width, opts->height);
+    gpu_generate_perlin_pixel<<<grid, block>>>(d_output, opts.seed, opts.width, opts.height);
 
     /* Wait for kernel to complete */
     CHECK(cudaDeviceSynchronize());
    
     /* copy and free the result from the device to the output pointer */
-    CHECK(cudaMemcpy(output, d_output, buffer_size, cudaMemcpyDeviceToHost));
-    CHECK(cudaFree(d_output));
+    //CHECK(cudaMemcpy(output, d_output, buffer_size, cudaMemcpyDeviceToHost));
+    //CHECK(cudaFree(d_output));
     
     printf("CUDA kernel completed successfully!\n");
-    return 0;
+
+   // return 0;
+    return;
 }

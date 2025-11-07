@@ -1,5 +1,5 @@
 /*
- * perlin.h - header file for perlin noise generator
+ * cuda__utils.cu - CUDA utility functions
  *
  */
 
@@ -19,16 +19,4 @@
  * limitations under the License.
  */
 
-#ifndef PERLIN_H
-#define PERLIN_H
-
-#include "options.h"
-
-/**
- * @brief generate perlin noise
- * @param opts Program options
- * @return 0 on success, error code on failure
- */
-int generate_perlin(const ProgramOptions *opts);
-
-#endif // PERLIN_H
+#include "cuda__utils.hpp"
