@@ -23,12 +23,14 @@
 #include "options.hpp"
 #include <iostream>
 
-Options parse_options(int argc, char** argv);
-
 int main(int argc, char** argv) {
 
     try {
         Options opts = parse_options(argc, argv);
+
+        if (opts.verbose) {
+            print_program_options(opts);
+        }
 
         generate_perlin_noise(opts);
         

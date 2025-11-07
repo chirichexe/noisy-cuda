@@ -25,13 +25,28 @@
 #include <cstdint>
 
 struct Options {
-    int width = 0;
-    int height = 0;
+    int width = 2048;
+    int height = 2048;
     int octaves = 1;
     std::string format = "png";
-    std::string output_filename = "output.png";
+    std::string output_filename = "perlin.png";
     bool verbose = false;
-    bool cpu_mode = false;
     std::uint64_t seed = 0;
     bool seed_provided = false;
 };
+
+/**
+ * @brief parse_options - parse command line arguments
+ * 
+ * @param argc the number of command line arguments
+ * @param argv the command line arguments
+ * @return Options 
+ */
+Options parse_options(int argc, char** argv);
+
+/**
+ * @brief print_program_options - print program options if verbose is enabled
+ * 
+ * @param opts the program options
+ */
+void print_program_options(Options opts);

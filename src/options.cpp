@@ -26,18 +26,14 @@
 #include <stdexcept>
 #include <cstring>
 #include <algorithm>
+#include <random>
+#include <chrono>
 
-/**
- * @brief parse_options - parse command line arguments
- * 
- * @param argc the number of command line arguments
- * @param argv the command line arguments
- * @return Options 
- */
 Options parse_options(int argc, char** argv) {
     Options opts;
 
     // Set default options
+    /*
     opts.width = 2048;
     opts.height = 2048;
     opts.octaves = 1;
@@ -46,6 +42,7 @@ Options parse_options(int argc, char** argv) {
     opts.verbose = false;
     opts.seed = 0;
     opts.seed_provided = false;
+    */
 
     // Help message lambda
     auto show_help = [argv]() {
@@ -135,6 +132,42 @@ Options parse_options(int argc, char** argv) {
         opts.output_filename = "perlin." + opts.format;
     }
 
+    // If no seed provided, generate one from time and random_device
+    if (!opts.seed_provided) {
+        unsigned long long time_seed =
+            static_cast<unsigned long long>(
+                std::chrono::high_resolution_clock::now().time_since_epoch().count());
+        std::seed_seq seq{time_seed, static_cast<unsigned long long>(std::random_device{}())};
+        std::vector<unsigned long long> seeds(1);
+        seq.generate(seeds.begin(), seeds.end());
+        opts.seed = seeds[0];
+    }
+
     return opts;
 }
 
+void print_program_options(Options opts) {
+    if (opts.verbose) {
+        printf("\n");
+        printf("              .__                                         .___       \n");
+        printf("  ____   ____ |__| _________.__.           ____  __ __  __| _/____   \n");
+        printf(" /    \\ /  _ \\|  |/  ___<   |  |  ______ _/ ___\\|  |  \\/ __ |\\__  \\  \n");
+        printf("|   |  (  <_> )  |\\___ \\ \\___  | /_____/ \\  \\___|  |  / /_/ | / __ \\_\n");
+        printf("|___|  /\\____/|__/____  >/ ____|          \\___  >____/\\____ |(____  /\n");
+        printf("     \\/               \\/ \\/                   \\/           \\/     \\/ \n");
+        printf("\n");
+
+        fprintf(stderr, "Configuration (strict):\n");
+        fprintf(stderr, "  Size:        %d x %d\n", opts.width, opts.height);
+        fprintf(stderr, "  Octaves:     %d\n", opts.octaves);
+        fprintf(stderr, "  Format:      %s\n", opts.format.c_str());
+        fprintf(stderr, "  Output file: %s\n", opts.output_filename.c_str());
+
+        if (opts.seed_provided) {
+            std::cerr << "  Seed:        " << opts.seed << " (provided)\n";
+        } else {
+            std::cerr << "  Seed:        " << opts.seed << " (auto-generated)\n";
+        }
+        fprintf(stderr, "  Verbose:     enabled\n");
+    }
+}
