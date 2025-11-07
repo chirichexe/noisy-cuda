@@ -25,6 +25,13 @@
 #include <cstdio>
 #include <cstdlib>
 
+/**
+ * @brief check CUDA call for errors and exit on failure
+ * @param call the CUDA call to check
+ * 
+ * @copyright 2025 Fabio Tosi, Alma Mater Studiorum - Università di Bologna
+ * 
+ */
 #define CHECK(call)                                                         \
 {                                                                           \
     const cudaError_t error = call;                                         \
