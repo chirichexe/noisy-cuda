@@ -20,7 +20,8 @@
  */
 
 #include "perlin_noise.hpp"
+#include <iostream>
 
 void generate_perlin_noise(const Options& opts) {
-    
+    std::cout << "SIMD Perlin noise generation not yet implemented. v2" << std::endl;
 }

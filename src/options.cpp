@@ -29,20 +29,15 @@
 #include <random>
 #include <chrono>
 
+auto show_version = []() {
+    std::cout << "noisy-cuda " << PROGRAM_VERSION
+            << " (" << BACKEND_NAME
+            << " backend, version " << BACKEND_VERSION << ")"
+            << " [commit " << GIT_HASH << "]" << std::endl;
+};
+
 Options parse_options(int argc, char** argv) {
     Options opts;
-
-    // Set default options
-    /*
-    opts.width = 2048;
-    opts.height = 2048;
-    opts.octaves = 1;
-    opts.format = "png";
-    opts.output_filename = "perlin.png";
-    opts.verbose = false;
-    opts.seed = 0;
-    opts.seed_provided = false;
-    */
 
     // Help message lambda
     auto show_help = [argv]() {
@@ -68,6 +63,12 @@ Options parse_options(int argc, char** argv) {
         // Help option
         if (arg == "-h" || arg == "--help") {
             show_help();
+            std::exit(0);
+        }
+
+        // Version option
+        if (arg == "--version") {
+            show_version();
             std::exit(0);
         }
 
@@ -156,6 +157,8 @@ void print_program_options(Options opts) {
         printf("|___|  /\\____/|__/____  >/ ____|          \\___  >____/\\____ |(____  /\n");
         printf("     \\/               \\/ \\/                   \\/           \\/     \\/ \n");
         printf("\n");
+
+        show_version();
 
         fprintf(stderr, "Configuration (strict):\n");
         fprintf(stderr, "  Size:        %d x %d\n", opts.width, opts.height);

@@ -1,5 +1,5 @@
 /*
- * perlin_noise.hpp - declaration of Perlin noise generation function
+ * simd__perlin_noise.cpp - perlin noise: SIMD implementation
  *
  */
 
@@ -19,14 +19,9 @@
  * limitations under the License.
  */
 
-#pragma once
-#include "options.hpp"
-#include <vector>
+#include "perlin_noise.hpp"
+#include <iostream>
 
-/**
- * @brief generate_perlin_noise - generate Perlin noise based on provided options
- * 
- * @param opts the options for noise generation
- * @return void
- */
-void generate_perlin_noise(const Options& opts);
+void generate_perlin_noise(const Options& opts) {
+    std::cout << "SIMD Perlin noise generation not yet implemented. v1" << std::endl;
+}

@@ -24,6 +24,28 @@
 #include <string>
 #include <cstdint>
 
+/**
+ * @brief Backend identification macros
+ */
+#ifndef BACKEND_NAME
+#define BACKEND_NAME "unknown"
+#endif
+
+#ifndef BACKEND_VERSION
+#define BACKEND_VERSION "latest"
+#endif
+
+#ifndef PROGRAM_VERSION
+#define PROGRAM_VERSION "0.0.1"
+#endif
+
+#ifndef GIT_HASH
+#define GIT_HASH "unknown"
+#endif
+
+/** 
+ * @brief Options - structure to hold program options
+ */
 struct Options {
     int width = 2048;
     int height = 2048;
