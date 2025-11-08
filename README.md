@@ -46,19 +46,6 @@ cmake --build build_cpp
 
 > Tip: Use separate build directories per backend to avoid conflicts and unnecessary recompilation.
 
-### Makefile Options
-
-```sh
-# Show all available Makefile options and targets
-make info
-
-# Build the project (default target)
-make
-
-# Clean build artifacts and generated files
-make clean
-```
-
 ## Command-Line Options
 
 ```
