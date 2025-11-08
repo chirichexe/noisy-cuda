@@ -3,6 +3,7 @@ template.txt
 clean.sh
 noisy_cuda
 .vscode
+build*
 
 ##### Windows
 # Windows thumbnail cache files
