@@ -16,11 +16,11 @@ A high-performance Perlin noise generator developed for the "Accelerated Process
 
 ## Available Backends and Versions
 
-| Backend | Available Versions | Description                           | Dependencies |   |
-|---------|--------------------|---------------------------------------|--------------|---|
-| CUDA    | v1                 | It uses  CUDA implementation          | CUDA         |   |
-| SIMD    | v1, v2             | It uses SIMD instructions for ISA x86 | SSE4         |   |
-| CPP     | v1                 | It is the naive C++ Implementation    | C++ compiler |   |
+| Backend | Available Versions | Description                           | Dependencies |
+|---------|--------------------|---------------------------------------|--------------|
+| CUDA    | v1                 | It uses  CUDA implementation          | CUDA         |
+| SIMD    | v1, v2             | It uses SIMD instructions for ISA x86 | SSE4         |
+| CPP     | v1                 | It is the naive C++ Implementation    | C++ compiler |
 
 > Note: The `latest` keyword automatically selects the highest available version.
 
