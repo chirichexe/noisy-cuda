@@ -5,6 +5,9 @@ noisy_cuda
 .vscode
 build*
 
+# outputs
+*.png
+
 ##### Windows
 # Windows thumbnail cache files
 Thumbs.db
