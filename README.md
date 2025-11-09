@@ -16,11 +16,11 @@ A high-performance Perlin noise generator developed for the "Accelerated Process
 
 ## Available Backends and Versions
 
-| Backend | Available Versions | Description                           | Dependencies |   |
-|---------|--------------------|---------------------------------------|--------------|---|
-| CUDA    | v1                 | It uses  CUDA implementation          | CUDA         |   |
-| SIMD    | v1, v2             | It uses SIMD instructions for ISA x86 | SSE4         |   |
-| CPP     | v1                 | It is the naive C++ Implementation    | C++ compiler |   |
+| Backend | Available Versions | Description                           | Dependencies |
+|---------|--------------------|---------------------------------------|--------------|
+| CUDA    | v1                 | It uses  CUDA implementation          | CUDA         |
+| SIMD    | v1, v2             | It uses SIMD instructions for ISA x86 | SSE4         |
+| CPP     | v1                 | It is the naive C++ Implementation    | C++ compiler |
 
 > Note: The `latest` keyword automatically selects the highest available version.
 
@@ -36,8 +36,8 @@ cmake -B build_cuda -DUSE_CUDA=ON
 cmake --build build_cuda
 
 # Build SIMD backend version v1
-cmake -B build_simd_v1 -DUSE_SIMD=ON -DSIMD_VERSION=v1
-cmake --build build_simd_v1
+cmake -B build_simd -DUSE_SIMD=ON -DSIMD_VERSION=v1
+cmake --build build_simd
 
 # Build C++ backend (CPU only)
 cmake -B build_cpp -DUSE_CPP=ON
@@ -45,19 +45,6 @@ cmake --build build_cpp
 ```
 
 > Tip: Use separate build directories per backend to avoid conflicts and unnecessary recompilation.
-
-### Makefile Options
-
-```sh
-# Show all available Makefile options and targets
-make info
-
-# Build the project (default target)
-make
-
-# Clean build artifacts and generated files
-make clean
-```
 
 ## Command-Line Options
 
