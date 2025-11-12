@@ -31,7 +31,7 @@
 #define CHUNK_SIDE_LENGTH 32
 
 float frequency = 1.0f;   // più alto = dettagli più fini
-float amplitude = 1.0f;   // più alto = contrasti più forti
+float amplitude = 2.0f;   // più alto = contrasti più forti
 
 
 
