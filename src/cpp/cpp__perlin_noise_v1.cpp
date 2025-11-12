@@ -25,9 +25,15 @@
 #include "stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+#include <algorithm>
 
 /* chunk variables */
 #define CHUNK_SIDE_LENGTH 32
+
+float frequency = 1.0f;   // più alto = dettagli più fini
+float amplitude = 1.0f;   // più alto = contrasti più forti
+
+
 
 /* vector structure */
 struct Vector2D {
@@ -70,11 +76,12 @@ struct Vector2D {
     }
 };
 
+
 /* chunk structure */
 struct Chunk {
     int chunk_idx_x = 0;
     int chunk_idx_y = 0;
-    /* one for each corner: 0-upLeft 1-upRight 2-downRight 3-downLeft */
+    /* one for each angle: 0-upLeft 1-upRight 2-downRight 3-downLeft */
     Vector2D unit_vectors[4];
 
     /* constructor */
@@ -89,34 +96,60 @@ struct Chunk {
         return a + t * (b - a);
     }
 
-    void generate_chunk_pixels(unsigned char* output, int image_width) const {
-        for (int x = 0; x < CHUNK_SIDE_LENGTH; x++) {
-            for (int y = 0; y < CHUNK_SIDE_LENGTH; y++) {
-                Vector2D pixel_pos = {static_cast<float>(x), static_cast<float>(y)};
+    void generate_chunk_pixels(unsigned char* output, int image_width, int image_height) const {
+        printf("Generating chunk [%d,%d]\n", chunk_idx_x, chunk_idx_y);
 
-                // Local coordinates relative to each corner
-                float dot00 = unit_vectors[0].dot(pixel_pos - get_corner_position_in_chunk(0));
-                float dot01 = unit_vectors[1].dot(pixel_pos - get_corner_position_in_chunk(1));
-                float dot10 = unit_vectors[2].dot(pixel_pos - get_corner_position_in_chunk(2));
-                float dot11 = unit_vectors[3].dot(pixel_pos - get_corner_position_in_chunk(3));
+        int maxPixel_x = chunk_idx_x * CHUNK_SIDE_LENGTH + CHUNK_SIDE_LENGTH;
+        int max_chunk_pixel_x = maxPixel_x > image_width ? maxPixel_x - image_width : CHUNK_SIDE_LENGTH; 
 
-                // Fractional distances
-                float fx = static_cast<float>(x) / (CHUNK_SIDE_LENGTH - 1);
-                float fy = static_cast<float>(y) / (CHUNK_SIDE_LENGTH - 1);
+        int maxPixel_y = chunk_idx_y * CHUNK_SIDE_LENGTH + CHUNK_SIDE_LENGTH;
+        int max_chunk_pixel_y = maxPixel_y > image_height ? maxPixel_y - image_height : CHUNK_SIDE_LENGTH;
 
-                float u = fade(fx);
-                float v = fade(fy);
+        for (int y = 0; y < max_chunk_pixel_y; y++) {
+            for (int x = 0; x < max_chunk_pixel_x; x++) {
+                // coordinate locali normalizzate [0,1]
+                float sx = float(x) / CHUNK_SIDE_LENGTH;
+                float sy = float(y) / CHUNK_SIDE_LENGTH;
+                
+                // applica frequenza
+                sx *= frequency;
+                sy *= frequency;
 
-                // Bilinear interpolation
-                float nx0 = lerp(dot00, dot10, u);
+                // vettori distanza da ogni corner (0,0), (1,0), (1,1), (0,1)
+                Vector2D d00 = {sx - 0.0f, sy - 0.0f};
+                Vector2D d10 = {sx - 1.0f, sy - 0.0f};
+                Vector2D d11 = {sx - 1.0f, sy - 1.0f};
+                Vector2D d01 = {sx - 0.0f, sy - 1.0f};
+
+                // dot product con i gradienti dei 4 angoli
+                float dot00 = unit_vectors[0].dot(d00);
+                float dot10 = unit_vectors[1].dot(d10);
+                float dot11 = unit_vectors[2].dot(d11);
+                float dot01 = unit_vectors[3].dot(d01);
+
+                // fade su coordinate normalizzate
+                Vector2D globalPos = get_global_pixel_position(x, y);
+
+                float gx = (globalPos.x) / float(image_width - 1);
+                float gy = (globalPos.y) / float(image_height - 1);
+                float u = fade(sx);
+                float v = fade(sy);
+
+                // interpolazioni
+                float nx0 = lerp(dot00, dot10, u) ;
                 float nx1 = lerp(dot01, dot11, u);
                 float value = lerp(nx0, nx1, v);
 
-                // Map to [0, 255]
-                value = (value + 1.0f) * 0.5f * 255.0f; // map [-1,1] -> [0,255]
+                // applica ampiezza
+                value *= amplitude;
+                value = std::clamp(value, -1.0f, 1.0f);
+                
+                // mappa [-1,1] → [0,255]
+                value = (value + 1.0f) * 0.5f * 255.0f;
 
-                Vector2D global = get_global_pixel_position(x, y);
-                output[static_cast<int>(global.y) * image_width + static_cast<int>(global.x)] =
+                // salva pixel nel buffer globale
+                
+                output[static_cast<int>(globalPos.y) * image_width + static_cast<int>(globalPos.x)] =
                     static_cast<unsigned char>(value);
             }
         }
@@ -130,58 +163,62 @@ struct Chunk {
         );
     }
 
-    Vector2D get_corner_position_in_chunk(int corner_id) const {
-        switch(corner_id){
-            default: return Vector2D(0,0);
-            case 1: return Vector2D(CHUNK_SIDE_LENGTH-1, 0);
-            case 2: return Vector2D(CHUNK_SIDE_LENGTH-1, CHUNK_SIDE_LENGTH-1);
-            case 3: return Vector2D(0, CHUNK_SIDE_LENGTH-1);
-        }
-    }
-
 };
+
+
 
 
 void generate_perlin_noise(const Options& opts) {
 
-    /* preparing buffer image */
-    unsigned int channels = 1;
-    unsigned int imageSize = opts.width * opts.height * channels;
-    unsigned char* output = (unsigned char*)malloc(imageSize);
-
     /* perlin variables */
     int width = opts.width;
     int height = opts.height;
+
+    /* preparing buffer image */
+    unsigned int channels = 1;
+    unsigned int imageSize = opts.width * opts.height * channels;
+    unsigned char output[imageSize];
     
-    int chunks_grid_width = width / CHUNK_SIDE_LENGTH;
-    int chunks_grid_height = height / CHUNK_SIDE_LENGTH;
+    /* calculating chunk size */
+    int chunks_grid_width = floor(width / CHUNK_SIDE_LENGTH);
+    if (width % CHUNK_SIDE_LENGTH != 0) 
+        chunks_grid_width++;
+    
+    int chunks_grid_height = floor(height / CHUNK_SIDE_LENGTH);
+    if (height % CHUNK_SIDE_LENGTH != 0) 
+        chunks_grid_height++;
 
     /* applying the seed on the C pseudorandomicity rand() function */
     srand(opts.seed);
+    
 
-    // generate corner unit vectors
-    int corners_needed = (chunks_grid_width+1) * (chunks_grid_height+1);
-    Vector2D* corner_unit_vectors = (Vector2D*)malloc(sizeof(Vector2D) * corners_needed);
-    for(int j = 0; j < chunks_grid_width; j++){
-        for(int i = 0; i < chunks_grid_height; i++){
+    /* generating angles unit vector */
+    int angles_needed = (chunks_grid_width + 1) * (chunks_grid_height + 1);
+
+    Vector2D angle_unit_vectors[chunks_grid_width + 1][chunks_grid_height + 1];
+
+    for(int x = 0; x < chunks_grid_width + 1; x++){
+        for(int y = 0; y < chunks_grid_height + 1; y++){
+
             float gx = (static_cast<float>(rand()) / RAND_MAX) * 2.0f - 1.0f;
             float gy = (static_cast<float>(rand()) / RAND_MAX) * 2.0f - 1.0f;
-            corner_unit_vectors[j * chunks_grid_width + i] = Vector2D(gx, gy).normalize();
+            
+            angle_unit_vectors[x][y] = Vector2D(gx, gy).normalize();
         }
     }
 
     // generate chunk pixels
-    for (int j = 0; j < chunks_grid_height; j++) {
-        for (int i = 0; i < chunks_grid_width; i++) {            
-            Chunk c_test = Chunk(i, j);
+    for (int x = 0; x < chunks_grid_width; x++) {
+        for (int y = 0; y < chunks_grid_height; y++) {            
+            Chunk c_test = Chunk(x, y);
 
-            // assign 4 corners from global grid
-            c_test.unit_vectors[0] = corner_unit_vectors[j * chunks_grid_width + i];       // TL
-            c_test.unit_vectors[1] = corner_unit_vectors[j * chunks_grid_width + (i+1)];   // TR
-            c_test.unit_vectors[2] = corner_unit_vectors[(j+1) * chunks_grid_width + (i+1)]; // BR
-            c_test.unit_vectors[3] = corner_unit_vectors[(j+1) * chunks_grid_width + i];   // BL
+            // assign 4 angles from global grid
+            c_test.unit_vectors[0] = angle_unit_vectors[x][y];       // TL
+            c_test.unit_vectors[1] = angle_unit_vectors[x+1][y];   // TR
+            c_test.unit_vectors[2] = angle_unit_vectors[x+1][y+1]; // BR
+            c_test.unit_vectors[3] = angle_unit_vectors[x][y+1];   // BL
 
-            c_test.generate_chunk_pixels(output, width);
+            c_test.generate_chunk_pixels(output, width, height);
         }
     }
 
@@ -190,6 +227,6 @@ void generate_perlin_noise(const Options& opts) {
     printf("Output saved as %s\n", opts.output_filename.c_str());
     
     /* free memory */
-    free(corner_unit_vectors);
-    free(output);
+    //free(angle_unit_vectors);
+    //free(output);
 }
