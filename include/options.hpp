@@ -50,12 +50,17 @@ struct Options {
     int width = 2048;
     int height = 2048;
     int octaves = 1;
+    float frequency = 1.0f;
+    float amplitude = 1.0f;
+    float lacunarity = 2.0f;
+    float persistence = 0.5f;
     std::string format = "png";
     std::string output_filename = "perlin.png";
     bool verbose = false;
     std::uint64_t seed = 0;
     bool seed_provided = false;
 };
+
 
 /**
  * @brief parse_options - parse command line arguments

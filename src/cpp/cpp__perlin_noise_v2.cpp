@@ -32,9 +32,6 @@
 /* chunk variables */
 #define CHUNK_SIDE_LENGTH 32
 
-float frequency = 144.0f;   // più alto = dettagli più fini
-float amplitude = 1.0f;   // più alto = contrasti più forti
-
 
 /* vector structure */
 struct Vector2D {
@@ -75,6 +72,8 @@ static float lerp(float a, float b, float t) {
 void generate_perlin_noise(const Options& opts) {
     int width = opts.width;
     int height = opts.height;
+    float frequency = opts.frequency;   // più alto = dettagli più fini
+    float amplitude = opts.amplitude;   // più alto = contrasti più forti
 
     unsigned int channels = 1;
     std::vector<unsigned char> output(width * height * channels, 0);

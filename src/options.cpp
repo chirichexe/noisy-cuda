@@ -47,6 +47,10 @@ Options parse_options(int argc, char** argv) {
         "  -h, --help                Show this help message and exit\n"
         "  -s, --size <WxH>          Image size in pixels (width x height). Default: 2048x2048\n"
         "  -O, --octaves <int>       Number of octaves (>=1). Default: 1\n"
+        "  -F, --frequency <float>   Base frequency (scale factor). Default: 1.0\n"
+        "  -A, --amplitude <float>   Base amplitude. Default: 1.0\n"
+        "  -L, --lacunarity <float>  Frequency multiplier per octave. Default: 2.0\n"
+        "  -P, --persistence <float> Amplitude multiplier per octave. Default: 0.5\n"
         "  -f, --format <string>     Output format: png, raw, csv, ppm. Default: png\n"
         "  -o, --output <filename>   Output filename. Default: perlin.<ext>\n"
         "  -v, --verbose             Print processing steps and timings\n"
@@ -55,6 +59,7 @@ Options parse_options(int argc, char** argv) {
         "interpreted as the RNG seed (e.g. './perlin 13813'). If both positional\n"
         "seed and --seed are provided the parser fails (ambiguous).\n";
     };
+
 
     // Parse arguments
     for (int i = 1; i < argc; ++i) {
@@ -88,6 +93,35 @@ Options parse_options(int argc, char** argv) {
             if (i + 1 >= argc) throw std::invalid_argument("Missing value for --octaves");
             opts.octaves = std::stoi(argv[++i]);
             if (opts.octaves < 1) throw std::invalid_argument("Octaves must be >= 1");
+        }
+
+        // Frequency option
+        else if (arg == "-F" || arg == "--frequency") {
+            if (i + 1 >= argc) throw std::invalid_argument("Missing value for --frequency");
+            opts.frequency = std::stof(argv[++i]);
+            if (opts.frequency <= 0.0f) throw std::invalid_argument("Frequency must be > 0");
+        }
+
+        // Amplitude option
+        else if (arg == "-A" || arg == "--amplitude") {
+            if (i + 1 >= argc) throw std::invalid_argument("Missing value for --amplitude");
+            opts.amplitude = std::stof(argv[++i]);
+            if (opts.amplitude <= 0.0f) throw std::invalid_argument("Amplitude must be > 0");
+        }
+
+        // Lacunarity option
+        else if (arg == "-L" || arg == "--lacunarity") {
+            if (i + 1 >= argc) throw std::invalid_argument("Missing value for --lacunarity");
+            opts.lacunarity = std::stof(argv[++i]);
+            if (opts.lacunarity <= 1.0f) throw std::invalid_argument("Lacunarity must be > 1");
+        }
+
+        // Persistence option
+        else if (arg == "-P" || arg == "--persistence") {
+            if (i + 1 >= argc) throw std::invalid_argument("Missing value for --persistence");
+            opts.persistence = std::stof(argv[++i]);
+            if (opts.persistence <= 0.0f || opts.persistence >= 1.0f)
+                throw std::invalid_argument("Persistence must be in (0,1)");
         }
 
         // Format option

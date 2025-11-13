@@ -48,15 +48,21 @@ cmake --build build_cpp
 
 ## Command-Line Options
 
-```
--h, --help         - Show help message and exit
--s, --size <WxH>   - Image size in pixels (width x height). Default: 2048x2048
--O, --octaves <int> - Number of octaves (>=1). Default: 1
--f, --format <string> - Output format: png, raw, csv, ppm. Default: png
--o, --output <filename> - Output filename. Default: perlin.<ext>
--v, --verbose      - Print processing steps and timings
--S, --seed <uint64> - Provide explicit seed (alternative to positional)
-```
+| Flag | Long Option | Argument | Default | Description |
+|------|--------------|-----------|----------|-------------|
+| `-h` | `--help` | none | — | Displays the help message and exits. |
+| `-s` | `--size` | `<WxH>` | `2048x2048` | Sets the image resolution in pixels, where `W` = width and `H` = height. |
+| `-O` | `--octaves` | `<int>` | `1` | Defines the number of noise layers (octaves) to combine. Higher values add more detail. Must be ≥ 1. |
+| `-F` | `--frequency` | `<float>` | `1.0` | Sets the base spatial frequency (scale factor). Higher values produce more dense variations. |
+| `-A` | `--amplitude` | `<float>` | `1.0` | Controls the base intensity (height) of the noise values. |
+| `-L` | `--lacunarity` | `<float>` | `2.0` | Multiplies frequency between successive octaves. Controls how quickly detail frequency increases. |
+| `-P` | `--persistence` | `<float>` | `0.5` | Multiplies amplitude between successive octaves. Controls how quickly amplitude decreases. |
+| `-f` | `--format` | `<string>` | `png` | Specifies the output format. Supported values: `png`, `raw`, `csv`, `ppm`. |
+| `-o` | `--output` | `<filename>` | `perlin.<ext>` | Defines the output filename. The extension is inferred from the chosen format. |
+| `-v` | `--verbose` | none | `false` | Prints detailed processing steps and timing information. |
+| `-S` | `--seed` | `<uint64>` | `0` | Sets a specific random seed for reproducible noise. |
+| *positional* | *(seed)* | `<uint64>` | — | Alternative way to provide the seed (e.g., `./perlin 12345`). Cannot be combined with `--seed`. |
+
 
 ## Output formats
 
