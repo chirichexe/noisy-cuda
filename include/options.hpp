@@ -50,7 +50,7 @@ struct Options {
     int width = 2048;
     int height = 2048;
     int octaves = 1;
-    float frequency = 1.0f;
+    float frequency = 50.0f;
     float amplitude = 1.0f;
     float lacunarity = 2.0f;
     float persistence = 0.5f;

@@ -52,8 +52,8 @@ cmake --build build_cpp
 |------|--------------|-----------|----------|-------------|
 | `-h` | `--help` | none | — | Displays the help message and exits. |
 | `-s` | `--size` | `<WxH>` | `2048x2048` | Sets the image resolution in pixels, where `W` = width and `H` = height. |
-| `-O` | `--octaves` | `<int>` | `1` | Defines the number of noise layers (octaves) to combine. Higher values add more detail. Must be ≥ 1. |
-| `-F` | `--frequency` | `<float>` | `1.0` | Sets the base spatial frequency (scale factor). Higher values produce more dense variations. |
+| `-O` | `--octaves` | `<int>` | `1` | Defines the number of noise layers (octaves) to combine. Higher values add more detail. Must be >= 1. |
+| `-F` | `--frequency` | `<float>` | `50.0` | Sets the base spatial frequency (scale factor). Higher values produce more dense variations. |
 | `-A` | `--amplitude` | `<float>` | `1.0` | Controls the base intensity (height) of the noise values. |
 | `-L` | `--lacunarity` | `<float>` | `2.0` | Multiplies frequency between successive octaves. Controls how quickly detail frequency increases. |
 | `-P` | `--persistence` | `<float>` | `0.5` | Multiplies amplitude between successive octaves. Controls how quickly amplitude decreases. |

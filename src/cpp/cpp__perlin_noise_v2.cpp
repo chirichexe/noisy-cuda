@@ -25,15 +25,19 @@
 #include "stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+
 #include <algorithm>
 #include <cmath>
 #include <vector>
+#include <cstdio>
 
 /* chunk variables */
 #define CHUNK_SIDE_LENGTH 32
 
 
-/* vector structure */
+/*
+ * Vector2D - simple 2D vector structure
+ */
 struct Vector2D {
     float x = 0.0f;
     float y = 0.0f;
@@ -60,28 +64,123 @@ struct Vector2D {
 };
 
 
+/*
+ * Fade function - smoother interpolation curve
+ */
 static float fade(float t) {
     return t * t * t * (t * (t * 6 - 15) + 10);
 }
 
+/*
+ * Linear interpolation
+ */
 static float lerp(float a, float b, float t) {
     return a + t * (b - a);
 }
 
 
+/*
+ * Chunk - handles a sub-region of the image using global gradients
+ */
+struct Chunk {
+    int chunk_x = 0;
+    int chunk_y = 0;
+
+    Chunk(int cx, int cy) : chunk_x(cx), chunk_y(cy) {}
+
+    void generate_chunk_pixels(
+        std::vector<unsigned char>& output,
+        int image_width,
+        int image_height,
+        const std::vector<std::vector<Vector2D>>& gradients,
+        int grad_w,
+        int grad_h,
+        float frequency,
+        float amplitude
+    ) const {
+        int start_x = chunk_x * CHUNK_SIDE_LENGTH;
+        int start_y = chunk_y * CHUNK_SIDE_LENGTH;
+
+        int end_x = std::min(start_x + CHUNK_SIDE_LENGTH, image_width);
+        int end_y = std::min(start_y + CHUNK_SIDE_LENGTH, image_height);
+
+        for (int y = start_y; y < end_y; y++) {
+            for (int x = start_x; x < end_x; x++) {
+                // normalized coordinates scaled by frequency
+                float fx = ((float)x / (float)image_width) * frequency;
+                float fy = ((float)y / (float)image_height) * frequency;
+
+                // integer grid cell
+                int x0 = (int)std::floor(fx);
+                int y0 = (int)std::floor(fy);
+                int x1 = x0 + 1;
+                int y1 = y0 + 1;
+
+                // local coordinates within the cell
+                float sx = fx - (float)x0;
+                float sy = fy - (float)y0;
+
+                // corner gradients (shared from global grid)
+                const Vector2D& g00 = gradients[x0 % grad_w][y0 % grad_h];
+                const Vector2D& g10 = gradients[x1 % grad_w][y0 % grad_h];
+                const Vector2D& g01 = gradients[x0 % grad_w][y1 % grad_h];
+                const Vector2D& g11 = gradients[x1 % grad_w][y1 % grad_h];
+
+                // distance vectors from corners
+                Vector2D d00(sx,     sy);
+                Vector2D d10(sx - 1, sy);
+                Vector2D d01(sx,     sy - 1);
+                Vector2D d11(sx - 1, sy - 1);
+
+                // dot products
+                float dot00 = g00.dot(d00);
+                float dot10 = g10.dot(d10);
+                float dot01 = g01.dot(d01);
+                float dot11 = g11.dot(d11);
+
+                // fade curves
+                float u = fade(sx);
+                float v = fade(sy);
+
+                // bilinear interpolation
+                float nx0 = lerp(dot00, dot10, u);
+                float nx1 = lerp(dot01, dot11, u);
+                float value = lerp(nx0, nx1, v);
+
+                // amplitude adjustment and normalization
+                value *= amplitude;
+                value = std::clamp(value, -1.0f, 1.0f);
+
+                // map [-1,1] → [0,255]
+                unsigned char pixel = static_cast<unsigned char>((value + 1.0f) * 0.5f * 255.0f);
+                output[y * image_width + x] = pixel;
+            }
+        }
+    }
+};
+
+
+/*
+ * generate_perlin_noise - generates a 2D Perlin noise map using chunks
+ */
 void generate_perlin_noise(const Options& opts) {
     int width = opts.width;
     int height = opts.height;
-    float frequency = opts.frequency;   // più alto = dettagli più fini
-    float amplitude = opts.amplitude;   // più alto = contrasti più forti
+    float frequency = opts.frequency;
+    float amplitude = opts.amplitude;
 
     unsigned int channels = 1;
     std::vector<unsigned char> output(width * height * channels, 0);
 
-    // calcolo griglia gradienti globale
-    int grad_w = width / CHUNK_SIDE_LENGTH + 2;   //CHANGED
-    int grad_h = height / CHUNK_SIDE_LENGTH + 2;  //CHANGED
+    /* calculate chunk grid */
+    int chunks_x = (width  + CHUNK_SIDE_LENGTH - 1) / CHUNK_SIDE_LENGTH;
+    int chunks_y = (height + CHUNK_SIDE_LENGTH - 1) / CHUNK_SIDE_LENGTH;
 
+    /* global gradient grid size */
+    int grad_w = chunks_x + 2;
+    int grad_h = chunks_y + 2;
+
+    /* initialize gradient vectors */
     srand(opts.seed);
     std::vector<std::vector<Vector2D>> gradients(grad_w, std::vector<Vector2D>(grad_h));
 
@@ -93,59 +192,15 @@ void generate_perlin_noise(const Options& opts) {
         }
     }
 
-    // Genera rumore continuo su tutta l'immagine (non per chunk)
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-
-            // Coordinate normalizzate (da 0 a frequency)
-            float fx = ((float)x / (float)width) * frequency;
-            float fy = ((float)y / (float)height) * frequency;
-
-            // Determina le celle integer
-            int x0 = (int)std::floor(fx);
-            int y0 = (int)std::floor(fy);
-            int x1 = x0 + 1;
-            int y1 = y0 + 1;
-
-            // coordinate locali dentro la cella
-            float sx = fx - (float)x0;
-            float sy = fy - (float)y0;
-
-            // gradienti dei 4 angoli
-            const Vector2D& g00 = gradients[x0 % grad_w][y0 % grad_h];
-            const Vector2D& g10 = gradients[x1 % grad_w][y0 % grad_h];
-            const Vector2D& g01 = gradients[x0 % grad_w][y1 % grad_h];
-            const Vector2D& g11 = gradients[x1 % grad_w][y1 % grad_h];
-
-            // distanze
-            Vector2D d00(sx,     sy);
-            Vector2D d10(sx - 1, sy);
-            Vector2D d01(sx,     sy - 1);
-            Vector2D d11(sx - 1, sy - 1);
-
-            // dot products
-            float dot00 = g00.dot(d00);
-            float dot10 = g10.dot(d10);
-            float dot01 = g01.dot(d01);
-            float dot11 = g11.dot(d11);
-
-            // fade curve
-            float u = fade(sx);
-            float v = fade(sy);
-
-            // interpolazione
-            float nx0 = lerp(dot00, dot10, u);
-            float nx1 = lerp(dot01, dot11, u);
-            float value = lerp(nx0, nx1, v);
-
-            value *= amplitude;
-            value = std::clamp(value, -1.0f, 1.0f);
-            unsigned char pixel = static_cast<unsigned char>((value + 1.0f) * 0.5f * 255.0f);
-
-            output[y * width + x] = pixel;
+    /* generate noise per chunk (continuous thanks to shared gradients) */
+    for (int cy = 0; cy < chunks_y; cy++) {
+        for (int cx = 0; cx < chunks_x; cx++) {
+            Chunk chunk(cx, cy);
+            chunk.generate_chunk_pixels(output, width, height, gradients, grad_w, grad_h, frequency, amplitude);
         }
     }
 
+    /* save the generated noise image */
     stbi_write_png(opts.output_filename.c_str(), width, height, channels, output.data(), width * channels);
     printf("Output saved as %s\n", opts.output_filename.c_str());
 }

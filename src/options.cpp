@@ -60,7 +60,6 @@ Options parse_options(int argc, char** argv) {
         "seed and --seed are provided the parser fails (ambiguous).\n";
     };
 
-
     // Parse arguments
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
