@@ -93,8 +93,8 @@ struct Chunk {
         int image_width,
         int image_height,
         const std::vector<std::vector<Vector2D>>& gradients,
-        int grad_w,
-        int grad_h,
+        int chunks_x,
+        int chunks_y,
         float frequency,
         float amplitude
     ) const {
@@ -121,10 +121,10 @@ struct Chunk {
                 float sy = fy - (float)y0;
 
                 // corner gradients (shared from global grid)
-                const Vector2D& g00 = gradients[x0 % grad_w][y0 % grad_h];
-                const Vector2D& g10 = gradients[x1 % grad_w][y0 % grad_h];
-                const Vector2D& g01 = gradients[x0 % grad_w][y1 % grad_h];
-                const Vector2D& g11 = gradients[x1 % grad_w][y1 % grad_h];
+                const Vector2D& g00 = gradients[x0 % chunks_x][y0 % chunks_y];
+                const Vector2D& g10 = gradients[x1 % chunks_x][y0 % chunks_y];
+                const Vector2D& g01 = gradients[x0 % chunks_x][y1 % chunks_y];
+                const Vector2D& g11 = gradients[x1 % chunks_x][y1 % chunks_y];
 
                 // distance vectors from corners
                 Vector2D d00(sx,     sy);
@@ -151,7 +151,7 @@ struct Chunk {
                 value *= amplitude;
                 value = std::clamp(value, -1.0f, 1.0f);
 
-                // map [-1,1] → [0,255]
+                // map [-1,1] -> [0,255]
                 unsigned char pixel = static_cast<unsigned char>((value + 1.0f) * 0.5f * 255.0f);
                 output[y * image_width + x] = pixel;
             }
@@ -164,28 +164,32 @@ struct Chunk {
  * generate_perlin_noise - generates a 2D Perlin noise map using chunks
  */
 void generate_perlin_noise(const Options& opts) {
+
+    /* initialize parameters */
     int width = opts.width;
     int height = opts.height;
     float frequency = opts.frequency;
     float amplitude = opts.amplitude;
+    int seed = opts.seed;
+    
+    /* randomize from seed */
+    srand(seed);
 
+    /* output buffer preparation*/
     unsigned int channels = 1;
     std::vector<unsigned char> output(width * height * channels, 0);
 
     /* calculate chunk grid */
-    int chunks_x = (width  + CHUNK_SIDE_LENGTH - 1) / CHUNK_SIDE_LENGTH;
+    int chunks_x = (width  + CHUNK_SIDE_LENGTH - 1) / CHUNK_SIDE_LENGTH; // for the CUDA case, is better to check which 
+                                                                         // chunk won't be filled
     int chunks_y = (height + CHUNK_SIDE_LENGTH - 1) / CHUNK_SIDE_LENGTH;
 
-    /* global gradient grid size */
-    int grad_w = chunks_x + 2;
-    int grad_h = chunks_y + 2;
-
     /* initialize gradient vectors */
-    srand(opts.seed);
-    std::vector<std::vector<Vector2D>> gradients(grad_w, std::vector<Vector2D>(grad_h));
+    // matrix of Vector2D
+    std::vector<std::vector<Vector2D>> gradients(chunks_x, std::vector<Vector2D>(chunks_y));
 
-    for (int gx = 0; gx < grad_w; gx++) {
-        for (int gy = 0; gy < grad_h; gy++) {
+    for (int gx = 0; gx < chunks_x; gx++) {
+        for (int gy = 0; gy < chunks_y; gy++) {
             float rx = (float)rand() / RAND_MAX * 2.0f - 1.0f;
             float ry = (float)rand() / RAND_MAX * 2.0f - 1.0f;
             gradients[gx][gy] = Vector2D(rx, ry).normalize();
@@ -196,7 +200,7 @@ void generate_perlin_noise(const Options& opts) {
     for (int cy = 0; cy < chunks_y; cy++) {
         for (int cx = 0; cx < chunks_x; cx++) {
             Chunk chunk(cx, cy);
-            chunk.generate_chunk_pixels(output, width, height, gradients, grad_w, grad_h, frequency, amplitude);
+            chunk.generate_chunk_pixels(output, width, height, gradients, chunks_x, chunks_y, frequency, amplitude);
         }
     }
 

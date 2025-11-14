@@ -1,4 +1,3 @@
-# Project and cmake properties
 cmake_minimum_required(VERSION 3.18)
 project(noisy_cuda LANGUAGES CXX CUDA)
 
@@ -11,7 +10,6 @@ set(COMMON_SRC
     src/options.cpp
 )
 
-# Backend selection and building
 if(USE_CUDA)
     add_subdirectory(src/cuda)
     set(BACKEND_TARGET perlin_cuda)
@@ -25,12 +23,10 @@ else()
     message(FATAL_ERROR "You must enable one backend (USE_CUDA, USE_SIMD, or USE_CPP)")
 endif()
 
-# Final executable
 add_executable(noisy_cuda ${COMMON_SRC})
 target_include_directories(noisy_cuda PRIVATE include)
 target_link_libraries(noisy_cuda PRIVATE ${BACKEND_TARGET})
 
-# Define backend name and version for the executable
 if(USE_CUDA)
     target_compile_definitions(noisy_cuda PRIVATE BACKEND_NAME="cuda" BACKEND_VERSION="${CUDA_VERSION}")
 elseif(USE_SIMD)
@@ -39,7 +35,6 @@ elseif(USE_CPP)
     target_compile_definitions(noisy_cuda PRIVATE BACKEND_NAME="cpp" BACKEND_VERSION="${CPP_VERSION}")
 endif()
 
-# Define program version
 set(PROGRAM_VERSION_MAJOR 0)
 set(PROGRAM_VERSION_MINOR 0)
 set(PROGRAM_VERSION_PATCH 1)
@@ -61,3 +56,23 @@ else()
 endif()
 
 add_definitions(-DGIT_HASH="${GIT_HASH}")
+
+
+# Build type (Debug or RelWithDebInfo are OK for Nsight Compute)
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE RelWithDebInfo)
+endif()
+
+# C++ debug info
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+
+# CUDA flags for profiling
+if(USE_CUDA)
+    # -lineinfo: mapping PTX <-> C++ (indispensabile)
+    # -G: abilita debug kernel (scomodo per performance, ma utile se serve)
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -lineinfo -g")
+
+    # Assicura che CUDA sia compilata con separable compilation (safe per progetti ibridi)
+    set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
+endif()
+

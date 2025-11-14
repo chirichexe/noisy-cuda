@@ -70,6 +70,12 @@ cmake --build build_cpp
 - `RAW`: Raw binary data
 - `CSV`: Comma-separated values
 
+## Start profiling session
+
+```sh
+ncu -o cuda --target-processes all ./build/cuda/noisy_cuda
+```
+
 ## License
 
 This project is released under the **Apache License 2.0**. See LICENSE file for details.
