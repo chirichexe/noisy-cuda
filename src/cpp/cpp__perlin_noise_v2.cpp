@@ -13,7 +13,7 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
+ * Distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
@@ -30,6 +30,8 @@
 #include <cmath>
 #include <vector>
 #include <cstdio>
+#include <chrono>
+#include <ctime>
 
 /* chunk variables */
 #define CHUNK_SIDE_LENGTH 32
@@ -89,7 +91,7 @@ struct Chunk {
     Chunk(int cx, int cy) : chunk_x(cx), chunk_y(cy) {}
 
     void generate_chunk_pixels(
-        std::vector<unsigned char>& output,
+        std::vector<float>& buffer, // CHANGED: now writes to a float accumulator
         int image_width,
         int image_height,
         const std::vector<std::vector<Vector2D>>& gradients,
@@ -126,7 +128,7 @@ struct Chunk {
                 const Vector2D& g01 = gradients[x0 % chunks_x][y1 % chunks_y];
                 const Vector2D& g11 = gradients[x1 % chunks_x][y1 % chunks_y];
 
-                // distance vectors from corners
+                // distance vectors
                 Vector2D d00(sx,     sy);
                 Vector2D d10(sx - 1, sy);
                 Vector2D d01(sx,     sy - 1);
@@ -147,13 +149,8 @@ struct Chunk {
                 float nx1 = lerp(dot01, dot11, u);
                 float value = lerp(nx0, nx1, v);
 
-                // amplitude adjustment and normalization
-                value *= amplitude;
-                value = std::clamp(value, -1.0f, 1.0f);
-
-                // map [-1,1] -> [0,255]
-                unsigned char pixel = static_cast<unsigned char>((value + 1.0f) * 0.5f * 255.0f);
-                output[y * image_width + x] = pixel;
+                // multiply by amplitude for THIS octave
+                buffer[y * image_width + x] += value * amplitude;  // ADDED: accumulate float noise
             }
         }
     }
@@ -166,26 +163,43 @@ struct Chunk {
 void generate_perlin_noise(const Options& opts) {
 
     /* initialize parameters */
+    // noise parameters
+    int seed = opts.seed;
     int width = opts.width;
     int height = opts.height;
-    float frequency = opts.frequency;
-    float amplitude = opts.amplitude;
-    int seed = opts.seed;
+    float base_frequency = opts.frequency;
+    float base_amplitude = opts.amplitude;
+    int octaves = opts.octaves;  // ADDED: number of FBM layers
+    int lacunarity = opts.lacunarity;
+    float persistence = opts.persistence;
+
+    // output info
+    std::string output_filename = opts.output_filename;
     
+    if (opts.verbose) {
+        printf("\nGenerating Perlin noise %dx%d\n freq=%.2f, amp=%.2f, octaves=%d, lacunarity=%.2f, persistence=%.2f, seed=%llu\n",
+               width, height, base_frequency, base_amplitude, octaves, lacunarity, persistence, opts.seed);
+    }
+
     /* randomize from seed */
     srand(seed);
 
-    /* output buffer preparation*/
-    unsigned int channels = 1;
-    std::vector<unsigned char> output(width * height * channels, 0);
+    /* start profiling timers */
+    std::chrono::high_resolution_clock::time_point wall_start;
+    clock_t cpu_start = 0;
+    if (opts.verbose) {
+        wall_start = std::chrono::high_resolution_clock::now();
+        cpu_start = std::clock();
+    }
+
+    /* float accumulation buffer (needed for octaves) */
+    std::vector<float> accumulator(width * height, 0.0f);   // ADDED: stores unnormalized fractal noise
 
     /* calculate chunk grid */
-    int chunks_x = (width  + CHUNK_SIDE_LENGTH - 1) / CHUNK_SIDE_LENGTH; // for the CUDA case, is better to check which 
-                                                                         // chunk won't be filled
+    int chunks_x = (width  + CHUNK_SIDE_LENGTH - 1) / CHUNK_SIDE_LENGTH;
     int chunks_y = (height + CHUNK_SIDE_LENGTH - 1) / CHUNK_SIDE_LENGTH;
 
     /* initialize gradient vectors */
-    // matrix of Vector2D
     std::vector<std::vector<Vector2D>> gradients(chunks_x, std::vector<Vector2D>(chunks_y));
 
     for (int gx = 0; gx < chunks_x; gx++) {
@@ -196,15 +210,81 @@ void generate_perlin_noise(const Options& opts) {
         }
     }
 
-    /* generate noise per chunk (continuous thanks to shared gradients) */
-    for (int cy = 0; cy < chunks_y; cy++) {
-        for (int cx = 0; cx < chunks_x; cx++) {
-            Chunk chunk(cx, cy);
-            chunk.generate_chunk_pixels(output, width, height, gradients, chunks_x, chunks_y, frequency, amplitude);
+    /* octave loop */
+    float frequency = base_frequency;
+    float amplitude = base_amplitude;
+
+    float amplitude_sum = 0.0f;   // to normalize the final image
+
+    for (int o = 0; o < octaves; o++) {
+
+        // accumulate weight for proper normalization
+        amplitude_sum += amplitude;
+
+        // generate noise for this octave using the existing chunk pipeline
+        for (int cy = 0; cy < chunks_y; cy++) {
+            for (int cx = 0; cx < chunks_x; cx++) {
+                Chunk chunk(cx, cy);
+                chunk.generate_chunk_pixels(
+                    accumulator,
+                    width,
+                    height,
+                    gradients,
+                    chunks_x,
+                    chunks_y,
+                    frequency,
+                    amplitude
+                );
+            }
         }
+
+        // prepare next octave (standard FBM rules)
+        // https://medium.com/@logan.margo314/procedural-generation-using-fractional-brownian-motion-b35b7231309f
+        frequency *= lacunarity;   // controls frequency growth
+        amplitude *= persistence;  // controls amplitude decay
+    }
+
+    /* stop profiling timers and report */
+    if (opts.verbose) {
+        clock_t cpu_end = std::clock();
+        auto wall_end = std::chrono::high_resolution_clock::now();
+
+        double cpu_ticks = static_cast<double>(cpu_end - cpu_start);
+        double cpu_seconds = cpu_ticks / static_cast<double>(CLOCKS_PER_SEC);
+        double wall_ms = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(wall_end - wall_start).count();
+
+        size_t num_pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
+        double ms_per_pixel = (num_pixels > 0) ? (wall_ms / (double)num_pixels) : 0.0;
+
+        size_t gradients_bytes = (size_t)chunks_x * (size_t)chunks_y * sizeof(Vector2D);
+        size_t accumulator_bytes = accumulator.size() * sizeof(float);
+        size_t estimated_total_alloc = gradients_bytes + accumulator_bytes;
+
+        printf("\nProfiling:\n");
+        printf("  wall time        = %.3f ms\n", wall_ms);
+        printf("  cpu time         = %.6f s (clock ticks = %.0f)\n", cpu_seconds, cpu_ticks);
+        printf("  time / pixel     = %.6f ms\n", ms_per_pixel);
+        printf("  chunks           = %dx%d (total %d)\n", chunks_x, chunks_y, chunks_x * chunks_y);
+        printf("  octaves          = %d, amplitude_sum = %.6f\n", octaves, amplitude_sum);
+        printf("  mem (approx)     = %zu bytes (gradients %zu + accumulator %zu)\n",
+               estimated_total_alloc, gradients_bytes, accumulator_bytes);
+    }
+
+    /* convert accumulator to final 0-255 output */
+    unsigned int channels = 1;
+    std::vector<unsigned char> output(width * height * channels, 0);
+
+    for (int i = 0; i < width * height; i++) {
+
+        // normalize fractal sum back to [-1,1]
+        float v = accumulator[i] / amplitude_sum;
+
+        v = std::clamp(v, -1.0f, 1.0f);
+
+        output[i] = static_cast<unsigned char>((v + 1.0f) * 0.5f * 255.0f);
     }
 
     /* save the generated noise image */
-    stbi_write_png(opts.output_filename.c_str(), width, height, channels, output.data(), width * channels);
-    printf("Output saved as %s\n", opts.output_filename.c_str());
+    stbi_write_png(output_filename.c_str(), width, height, channels, output.data(), width * channels);
+    printf("Output saved as %s\n", output_filename.c_str());
 }
