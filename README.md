@@ -77,6 +77,53 @@ Usage: `./perlin [seed] [OPTIONS]`
 ncu -o cuda --target-processes all ./build/cuda/noisy_cuda
 ```
 
+# Examples
+
+Below are four example terrains generated with Perlin noise using seed `1234`.  
+The output images are located in `docs/examples/png/`.
+
+<table>
+<tr>
+  <td align="center">
+    <img src="docs/examples/png/terrain_1.png" width="200"><br>
+    <b>Terrain 1</b><br>
+    Freq: 1.0<br>
+    Amp: 1.0<br>
+    Lac: 2.0<br>
+    Pers: 0.5<br>
+    Octaves: 4
+  </td>
+  <td align="center">
+    <img src="docs/examples/png/terrain_2.png" width="200"><br>
+    <b>Terrain 2</b><br>
+    Freq: 2.0<br>
+    Amp: 1.0<br>
+    Lac: 2.5<br>
+    Pers: 0.6<br>
+    Octaves: 5
+  </td>
+  <td align="center">
+    <img src="docs/examples/png/terrain_3.png" width="200"><br>
+    <b>Terrain 3</b><br>
+    Freq: 4.0<br>
+    Amp: 1.0<br>
+    Lac: 2.0<br>
+    Pers: 0.7<br>
+    Octaves: 6
+  </td>
+  <td align="center">
+    <img src="docs/examples/png/terrain_4.png" width="200"><br>
+    <b>Terrain 4</b><br>
+    Freq: 0.5<br>
+    Amp: 1.0<br>
+    Lac: 2.0<br>
+    Pers: 0.4<br>
+    Octaves: 3
+  </td>
+</tr>
+</table>
+
+
 ## License
 
 This project is released under the **Apache License 2.0**. See LICENSE file for details.
