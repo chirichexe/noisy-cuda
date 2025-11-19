@@ -217,12 +217,7 @@ void generate_perlin_noise(const Options& opts) {
     float frequency = base_frequency;
     float amplitude = base_amplitude;
 
-    float amplitude_sum = 0.0f;   // to normalize the final image
-
     for (int o = 0; o < octaves; o++) {
-
-        // accumulate weight for proper normalization
-        amplitude_sum += amplitude;
 
         // generate noise for this octave using the existing chunk pipeline
         for (int cy = 0; cy < chunks_count_y; cy++) {
@@ -271,7 +266,6 @@ void generate_perlin_noise(const Options& opts) {
         printf("  cpu time         = %.6f s (clock ticks = %.0f)\n", cpu_seconds, cpu_ticks);
         printf("  time / pixel     = %.6f ms\n", ms_per_pixel);
         printf("  chunks           = %dx%d (total %d)\n", chunks_count_x, chunks_count_y, chunks_count_x * chunks_count_y);
-        printf("  octaves          = %d, amplitude_sum = %.6f\n", octaves, amplitude_sum);
         printf("  mem (approx)     = %zu bytes (gradients %zu + accumulator %zu)\n",
                estimated_total_alloc, gradients_bytes, accumulator_bytes);
     }

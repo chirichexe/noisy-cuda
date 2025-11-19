@@ -63,7 +63,6 @@ struct Options {
     bool seed_provided = false;
 };
 
-
 /**
  * @brief parse_options - parse command line arguments
  * 

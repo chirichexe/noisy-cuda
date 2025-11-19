@@ -45,24 +45,25 @@ cmake --build build_cpp
 ```
 
 > Tip: Use separate build directories per backend to avoid conflicts and unnecessary recompilation.
-
 ## Command-Line Options
 
 | Flag | Long Option | Argument | Default | Description |
-|------|--------------|-----------|----------|-------------|
-| `-h` | `--help` | none | — | Displays the help message and exits. |
-| `-s` | `--size` | `<WxH>` | `2048x2048` | Sets the image resolution in pixels, where `W` = width and `H` = height. |
-| `-O` | `--octaves` | `<int>` | `1` | Defines the number of noise layers (octaves) to combine. Higher values add more detail. Must be >= 1. |
-| `-F` | `--frequency` | `<float>` | `50.0` | Sets the base spatial frequency (scale factor). Higher values produce more dense variations. |
-| `-A` | `--amplitude` | `<float>` | `1.0` | Controls the base intensity (height) of the noise values. |
-| `-L` | `--lacunarity` | `<float>` | `2.0` | Multiplies frequency between successive octaves. Controls how quickly detail frequency increases. |
-| `-P` | `--persistence` | `<float>` | `0.5` | Multiplies amplitude between successive octaves. Controls how quickly amplitude decreases. |
-| `-f` | `--format` | `<string>` | `png` | Specifies the output format. Supported values: `png`, `raw`, `csv`, `ppm`. |
-| `-o` | `--output` | `<filename>` | `perlin.<ext>` | Defines the output filename. The extension is inferred from the chosen format. |
-| `-v` | `--verbose` | none | `false` | Prints detailed processing steps and timing information. |
-| `-S` | `--seed` | `<uint64>` | `0` | Sets a specific random seed for reproducible noise. |
-| *positional* | *(seed)* | `<uint64>` | — | Alternative way to provide the seed (e.g., `./perlin 12345`). Cannot be combined with `--seed`. |
+|------|-------------|----------|---------|-------------|
+| `-h` | `--help` | none | — | Show this help message and exit. |
+| — | `--version` | none | — | Show program version and exit. |
+| `-o` | `--output` | `<filename>` | `perlin.<ext>` | Output filename. Extension inferred from format. |
+| `-f` | `--format` | `<string>` | `png` | Output format. Supported: `png`, `raw`, `csv`, `ppm`. |
+| `-s` | `--size` | `<WxH>` | `2048x2048` | Output size in pixels (width x height). |
+| `-v` | `--verbose` | none | `false` | Print processing steps and timings. |
+| `-F` | `--frequency` | `<float>` | `1.0` | Base frequency (scale factor). |
+| `-A` | `--amplitude` | `<float>` | `1.0` | Base amplitude. |
+| `-L` | `--lacunarity` | `<float>` | `2.0` | Frequency multiplier per octave. |
+| `-P` | `--persistence` | `<float>` | `0.5` | Amplitude multiplier per octave. |
+| `-O` | `--offset` | `<x,y>` | `0,0` | Offset applied to noise coordinates. |
+| `-C` | `--octaves` | `<int>` | `1` | Number of octaves (>= 1). |
+| *positional* | *(seed)* | `<uint64>` | — | Positional unsigned integer seed (e.g. `./perlin 13813`). |
 
+Usage: `./perlin [seed] [OPTIONS]`
 
 ## Output formats
 

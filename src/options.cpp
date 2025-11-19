@@ -29,13 +29,6 @@
 #include <random>
 #include <chrono>
 
-auto show_version = []() {
-    std::cout << "noisy-cuda " << PROGRAM_VERSION
-            << " (" << BACKEND_NAME
-            << " backend, version " << BACKEND_VERSION << ")"
-            << " [commit " << GIT_HASH << "]" << std::endl;
-};
-
 Options parse_options(int argc, char** argv) {
     Options opts;
 
@@ -63,6 +56,13 @@ Options parse_options(int argc, char** argv) {
         "  -C, --octaves <int>       Number of octaves (>=1). Default: 1\n";
     };
 
+    auto show_version = []() {
+    std::cout << "noisy-cuda " << PROGRAM_VERSION
+            << " (" << BACKEND_NAME
+            << " backend, version " << BACKEND_VERSION << ")"
+            << " [commit " << GIT_HASH << "]" << std::endl;
+    };
+
     // Parse arguments
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -85,7 +85,19 @@ Options parse_options(int argc, char** argv) {
             opts.seed_provided = true;
         }
 
-        // Size option
+        // Output filename option (help order: -o)
+        else if (arg == "-o" || arg == "--output") {
+            if (i + 1 >= argc) throw std::invalid_argument("Missing value for --output");
+            opts.output_filename = argv[++i];
+        }
+
+        // Format option (help order: -f)
+        else if (arg == "-f" || arg == "--format") {
+            if (i + 1 >= argc) throw std::invalid_argument("Missing value for --format");
+            opts.format = argv[++i];
+        }
+
+        // Size option (help order: -s)
         else if (arg == "-s" || arg == "--size") {
             if (i + 1 >= argc) throw std::invalid_argument("Missing value for --size");
             std::string val = argv[++i];
@@ -96,35 +108,33 @@ Options parse_options(int argc, char** argv) {
                 throw std::invalid_argument("Invalid size format, expected WxH");
         }
 
-        // Octaves option
-        else if (arg == "-C" || arg == "--octaves") {
-            if (i + 1 >= argc) throw std::invalid_argument("Missing value for --octaves");
-            opts.octaves = std::stoi(argv[++i]);
-            if (opts.octaves < 1) throw std::invalid_argument("Octaves must be >= 1");
+        // Verbose option (help order: -v)
+        else if (arg == "-v" || arg == "--verbose") {
+            opts.verbose = true;
         }
 
-        // Frequency option
+        // Frequency option (Perlin options order: -F)
         else if (arg == "-F" || arg == "--frequency") {
             if (i + 1 >= argc) throw std::invalid_argument("Missing value for --frequency");
             opts.frequency = std::stof(argv[++i]);
             if (opts.frequency <= 0.0f) throw std::invalid_argument("Frequency must be > 0");
         }
 
-        // Amplitude option
+        // Amplitude option (Perlin options order: -A)
         else if (arg == "-A" || arg == "--amplitude") {
             if (i + 1 >= argc) throw std::invalid_argument("Missing value for --amplitude");
             opts.amplitude = std::stof(argv[++i]);
             if (opts.amplitude <= 0.0f) throw std::invalid_argument("Amplitude must be > 0");
         }
 
-        // Lacunarity option
+        // Lacunarity option (Perlin options order: -L)
         else if (arg == "-L" || arg == "--lacunarity") {
             if (i + 1 >= argc) throw std::invalid_argument("Missing value for --lacunarity");
             opts.lacunarity = std::stof(argv[++i]);
             if (opts.lacunarity <= 1.0f) throw std::invalid_argument("Lacunarity must be > 1");
         }
 
-        // Persistence option
+        // Persistence option (Perlin options order: -P)
         else if (arg == "-P" || arg == "--persistence") {
             if (i + 1 >= argc) throw std::invalid_argument("Missing value for --persistence");
             opts.persistence = std::stof(argv[++i]);
@@ -132,19 +142,7 @@ Options parse_options(int argc, char** argv) {
                 throw std::invalid_argument("Persistence must be in (0,1)");
         }
 
-        // Format option
-        else if (arg == "-f" || arg == "--format") {
-            if (i + 1 >= argc) throw std::invalid_argument("Missing value for --format");
-            opts.format = argv[++i];
-        }
-
-        // Output filename option
-        else if (arg == "-o" || arg == "--output") {
-            if (i + 1 >= argc) throw std::invalid_argument("Missing value for --output");
-            opts.output_filename = argv[++i];
-        }
-
-        // Offset option
+        // Offset option (Perlin options order: -O)
         else if (arg == "-O" || arg == "--offset") {
             if (i + 1 >= argc) throw std::invalid_argument("Missing value for --offset");
 
@@ -157,9 +155,11 @@ Options parse_options(int argc, char** argv) {
                 throw std::invalid_argument("Invalid offset format, expected x,y");
         }
 
-        // Verbose option
-        else if (arg == "-v" || arg == "--verbose") {
-            opts.verbose = true;
+        // Octaves option (Perlin options order: -C)
+        else if (arg == "-C" || arg == "--octaves") {
+            if (i + 1 >= argc) throw std::invalid_argument("Missing value for --octaves");
+            opts.octaves = std::stoi(argv[++i]);
+            if (opts.octaves < 1) throw std::invalid_argument("Octaves must be >= 1");
         }
 
         // Unknown option
@@ -197,8 +197,6 @@ void print_program_options(Options opts) {
         printf("|___|  /\\____/|__/____  >/ ____|          \\___  >____/\\____ |(____  /\n");
         printf("     \\/               \\/ \\/                   \\/           \\/     \\/ \n");
         printf("\n");
-
-        show_version();
 
         fprintf(stderr, "Configuration:\n");
         fprintf(stderr, "  Size:        %d x %d\n", opts.width, opts.height);
