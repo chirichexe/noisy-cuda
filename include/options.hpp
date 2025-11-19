@@ -54,6 +54,8 @@ struct Options {
     float amplitude = 1.0f;
     float lacunarity = 2.0f;
     float persistence = 0.5f;
+    int offset_x = 0;
+    int offset_y = 0;
     std::string format = "png";
     std::string output_filename = "perlin.png";
     bool verbose = false;

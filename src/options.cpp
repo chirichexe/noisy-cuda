@@ -42,22 +42,25 @@ Options parse_options(int argc, char** argv) {
     // Help message lambda
     auto show_help = [argv]() {
         std::cout <<
-        "Usage: " << argv[0] << " [OPTIONS] [seed]\n\n"
+        "Usage: " << argv[0] << " [seed] [OPTIONS]\n\n"
         "Perlin noise generator — option parsing module only.\n\n"
+        "Positional 'seed' is accepted as an unsigned integer: if present it is\n"
+        "interpreted as the RNG seed (e.g. './perlin 13813').\n"
+        "\n"
         "  -h, --help                Show this help message and exit\n"
-        "  -s, --size <WxH>          Image size in pixels (width x height). Default: 2048x2048\n"
-        "  -O, --octaves <int>       Number of octaves (>=1). Default: 1\n"
+        "  --version                 Show program version and exit\n\n"
+        "  -o, --output <filename>   Output filename. Default: perlin.<ext>\n"
+        "  -f, --format <string>     Output format: png, raw, csv, ppm. Default: png\n"
+        "  -s, --size <WxH>          Output size in pixels (width x height). Default: 2048x2048\n"
+        "  -v, --verbose             Print processing steps and timings\n"
+        "\n"
+        "  Perlin noise generation options:\n\n"
         "  -F, --frequency <float>   Base frequency (scale factor). Default: 1.0\n"
         "  -A, --amplitude <float>   Base amplitude. Default: 1.0\n"
         "  -L, --lacunarity <float>  Frequency multiplier per octave. Default: 2.0\n"
         "  -P, --persistence <float> Amplitude multiplier per octave. Default: 0.5\n"
-        "  -f, --format <string>     Output format: png, raw, csv, ppm. Default: png\n"
-        "  -o, --output <filename>   Output filename. Default: perlin.<ext>\n"
-        "  -v, --verbose             Print processing steps and timings\n"
-        "  -S, --seed <uint64>       Provide explicit seed (alternative to positional)\n\n"
-        "Positional 'seed' is accepted as an unsigned integer: if present it is\n"
-        "interpreted as the RNG seed (e.g. './perlin 13813'). If both positional\n"
-        "seed and --seed are provided the parser fails (ambiguous).\n";
+        "  -O, --offset <x,y>        Offset for the noise generation. Default: 0,0\n"
+        "  -C, --octaves <int>       Number of octaves (>=1). Default: 1\n";
     };
 
     // Parse arguments
@@ -76,6 +79,12 @@ Options parse_options(int argc, char** argv) {
             std::exit(0);
         }
 
+        // Positional seed
+        else if (arg[0] != '-') {
+            opts.seed = std::stoull(arg);
+            opts.seed_provided = true;
+        }
+
         // Size option
         else if (arg == "-s" || arg == "--size") {
             if (i + 1 >= argc) throw std::invalid_argument("Missing value for --size");
@@ -88,7 +97,7 @@ Options parse_options(int argc, char** argv) {
         }
 
         // Octaves option
-        else if (arg == "-O" || arg == "--octaves") {
+        else if (arg == "-C" || arg == "--octaves") {
             if (i + 1 >= argc) throw std::invalid_argument("Missing value for --octaves");
             opts.octaves = std::stoi(argv[++i]);
             if (opts.octaves < 1) throw std::invalid_argument("Octaves must be >= 1");
@@ -135,24 +144,22 @@ Options parse_options(int argc, char** argv) {
             opts.output_filename = argv[++i];
         }
 
+        // Offset option
+        else if (arg == "-O" || arg == "--offset") {
+            if (i + 1 >= argc) throw std::invalid_argument("Missing value for --offset");
+
+            std::string val = argv[++i];
+            std::replace(val.begin(), val.end(), ',', ' ');
+            std::istringstream ss(val);
+            ss >> opts.offset_x >> opts.offset_y;
+
+            if (!ss)
+                throw std::invalid_argument("Invalid offset format, expected x,y");
+        }
+
         // Verbose option
         else if (arg == "-v" || arg == "--verbose") {
             opts.verbose = true;
-        }
-
-        // Seed option
-        else if (arg == "-S" || arg == "--seed") {
-            if (i + 1 >= argc) throw std::invalid_argument("Missing value for --seed");
-            opts.seed = std::stoull(argv[++i]);
-            opts.seed_provided = true;
-        }
-
-        // Positional seed
-        else if (arg[0] != '-') {
-            if (opts.seed_provided)
-                throw std::invalid_argument("Cannot provide both positional seed and --seed");
-            opts.seed = std::stoull(arg);
-            opts.seed_provided = true;
         }
 
         // Unknown option
@@ -193,9 +200,8 @@ void print_program_options(Options opts) {
 
         show_version();
 
-        fprintf(stderr, "Configuration (strict):\n");
+        fprintf(stderr, "Configuration:\n");
         fprintf(stderr, "  Size:        %d x %d\n", opts.width, opts.height);
-        fprintf(stderr, "  Octaves:     %d\n", opts.octaves);
         fprintf(stderr, "  Format:      %s\n", opts.format.c_str());
         fprintf(stderr, "  Output file: %s\n", opts.output_filename.c_str());
 
@@ -205,5 +211,15 @@ void print_program_options(Options opts) {
             std::cerr << "  Seed:        " << opts.seed << " (auto-generated)\n";
         }
         fprintf(stderr, "  Verbose:     enabled\n");
+
+        /* perlin parameters */
+            std::cout << "Generating Perlin noise with options:\n"
+            << "  size:" << opts.width << "x" << opts.height << "\n"
+            << "  freq=" << opts.frequency << "\n"
+            << "  amp=" << opts.amplitude << "\n"
+            << "  octaves=" << opts.octaves << "\n"
+            << "  lacunarity=" << opts.lacunarity << "\n"
+            << "  persistence=" << opts.persistence << "\n"
+            << "  offset=(" << opts.offset_x << "," << opts.offset_y << ")\n";
     }
 }
