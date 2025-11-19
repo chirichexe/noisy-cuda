@@ -95,8 +95,8 @@ struct Chunk {
         int image_width,
         int image_height,
         const std::vector<std::vector<Vector2D>>& gradients,
-        int chunks_x,
-        int chunks_y,
+        int chunks_count_x,
+        int chunks_count_y,
         float frequency,
         float amplitude
     ) const {
@@ -108,9 +108,11 @@ struct Chunk {
 
         for (int y = start_y; y < end_y; y++) {
             for (int x = start_x; x < end_x; x++) {
+                float lerpCoeff = std::max(image_width, image_height);
+
                 // normalized coordinates scaled by frequency
-                float fx = ((float)x / (float)image_width) * frequency;
-                float fy = ((float)y / (float)image_height) * frequency;
+                float fx = ((float)x / (float)lerpCoeff) * frequency;
+                float fy = ((float)y / (float)lerpCoeff) * frequency;
 
                 // integer grid cell
                 int x0 = (int)std::floor(fx);
@@ -123,10 +125,10 @@ struct Chunk {
                 float sy = fy - (float)y0;
 
                 // corner gradients (shared from global grid)
-                const Vector2D& g00 = gradients[x0 % chunks_x][y0 % chunks_y];
-                const Vector2D& g10 = gradients[x1 % chunks_x][y0 % chunks_y];
-                const Vector2D& g01 = gradients[x0 % chunks_x][y1 % chunks_y];
-                const Vector2D& g11 = gradients[x1 % chunks_x][y1 % chunks_y];
+                const Vector2D& g00 = gradients[x0 % chunks_count_x][y0 % chunks_count_y];  // tl
+                const Vector2D& g10 = gradients[x1 % chunks_count_x][y0 % chunks_count_y];  // tr
+                const Vector2D& g01 = gradients[x0 % chunks_count_x][y1 % chunks_count_y];  // bl
+                const Vector2D& g11 = gradients[x1 % chunks_count_x][y1 % chunks_count_y];  // br
 
                 // distance vectors
                 Vector2D d00(sx,     sy);
@@ -196,14 +198,14 @@ void generate_perlin_noise(const Options& opts) {
     std::vector<float> accumulator(width * height, 0.0f);   // ADDED: stores unnormalized fractal noise
 
     /* calculate chunk grid */
-    int chunks_x = (width  + CHUNK_SIDE_LENGTH - 1) / CHUNK_SIDE_LENGTH;
-    int chunks_y = (height + CHUNK_SIDE_LENGTH - 1) / CHUNK_SIDE_LENGTH;
+    int chunks_count_x = (width  + CHUNK_SIDE_LENGTH - 1) / CHUNK_SIDE_LENGTH;
+    int chunks_count_y = (height + CHUNK_SIDE_LENGTH - 1) / CHUNK_SIDE_LENGTH;
 
     /* initialize gradient vectors */
-    std::vector<std::vector<Vector2D>> gradients(chunks_x, std::vector<Vector2D>(chunks_y));
+    std::vector<std::vector<Vector2D>> gradients(chunks_count_x, std::vector<Vector2D>(chunks_count_y));
 
-    for (int gx = 0; gx < chunks_x; gx++) {
-        for (int gy = 0; gy < chunks_y; gy++) {
+    for (int gx = 0; gx < chunks_count_x; gx++) {
+        for (int gy = 0; gy < chunks_count_y; gy++) {
             float rx = (float)rand() / RAND_MAX * 2.0f - 1.0f;
             float ry = (float)rand() / RAND_MAX * 2.0f - 1.0f;
             gradients[gx][gy] = Vector2D(rx, ry).normalize();
@@ -222,16 +224,17 @@ void generate_perlin_noise(const Options& opts) {
         amplitude_sum += amplitude;
 
         // generate noise for this octave using the existing chunk pipeline
-        for (int cy = 0; cy < chunks_y; cy++) {
-            for (int cx = 0; cx < chunks_x; cx++) {
+        for (int cy = 0; cy < chunks_count_y; cy++) {
+            for (int cx = 0; cx < chunks_count_x; cx++) {
                 Chunk chunk(cx, cy);
+                
                 chunk.generate_chunk_pixels(
                     accumulator,
                     width,
                     height,
                     gradients,
-                    chunks_x,
-                    chunks_y,
+                    chunks_count_x,
+                    chunks_count_y,
                     frequency,
                     amplitude
                 );
@@ -256,7 +259,7 @@ void generate_perlin_noise(const Options& opts) {
         size_t num_pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
         double ms_per_pixel = (num_pixels > 0) ? (wall_ms / (double)num_pixels) : 0.0;
 
-        size_t gradients_bytes = (size_t)chunks_x * (size_t)chunks_y * sizeof(Vector2D);
+        size_t gradients_bytes = (size_t)chunks_count_x * (size_t)chunks_count_y * sizeof(Vector2D);
         size_t accumulator_bytes = accumulator.size() * sizeof(float);
         size_t estimated_total_alloc = gradients_bytes + accumulator_bytes;
 
@@ -264,7 +267,7 @@ void generate_perlin_noise(const Options& opts) {
         printf("  wall time        = %.3f ms\n", wall_ms);
         printf("  cpu time         = %.6f s (clock ticks = %.0f)\n", cpu_seconds, cpu_ticks);
         printf("  time / pixel     = %.6f ms\n", ms_per_pixel);
-        printf("  chunks           = %dx%d (total %d)\n", chunks_x, chunks_y, chunks_x * chunks_y);
+        printf("  chunks           = %dx%d (total %d)\n", chunks_count_x, chunks_count_y, chunks_count_x * chunks_count_y);
         printf("  octaves          = %d, amplitude_sum = %.6f\n", octaves, amplitude_sum);
         printf("  mem (approx)     = %zu bytes (gradients %zu + accumulator %zu)\n",
                estimated_total_alloc, gradients_bytes, accumulator_bytes);
@@ -277,7 +280,7 @@ void generate_perlin_noise(const Options& opts) {
     for (int i = 0; i < width * height; i++) {
 
         // normalize fractal sum back to [-1,1]
-        float v = accumulator[i] / amplitude_sum;
+        float v = accumulator[i];
 
         v = std::clamp(v, -1.0f, 1.0f);
 
