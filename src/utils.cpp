@@ -1,5 +1,5 @@
 /*
- * cuda__utils.cu - CUDA utility functions
+ * utils.cpp - utility function for noisy-cuda
  *
  */
 
@@ -19,12 +19,13 @@
  * limitations under the License.
  */
 
-#include "cuda__utils.hpp"
+#include "utils.hpp"
+#include <cmath>
 
-__device__ float fade(float t) {
-    return t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
+static float fade(float t) {
+    return t * t * t * (t * (t * 6 - 15) + 10);
 }
 
-__device__ float lerp(float a, float b, float t) {
+static float lerp(float a, float b, float t) {
     return a + t * (b - a);
 }
