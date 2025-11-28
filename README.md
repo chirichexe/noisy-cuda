@@ -86,7 +86,7 @@ The output images are located in `docs/examples/png/`.
 <tr>
   <td align="center">
     <img src="docs/examples/png/terrain_1.png" width="200"><br>
-    <b>Terrain 1</b><br>
+    <br>
     Freq: 1.0<br>
     Amp: 1.0<br>
     Lac: 2.0<br>
@@ -95,7 +95,7 @@ The output images are located in `docs/examples/png/`.
   </td>
   <td align="center">
     <img src="docs/examples/png/terrain_2.png" width="200"><br>
-    <b>Terrain 2</b><br>
+    <br>
     Freq: 2.0<br>
     Amp: 1.0<br>
     Lac: 2.5<br>
@@ -104,7 +104,7 @@ The output images are located in `docs/examples/png/`.
   </td>
   <td align="center">
     <img src="docs/examples/png/terrain_3.png" width="200"><br>
-    <b>Terrain 3</b><br>
+    <br>
     Freq: 4.0<br>
     Amp: 1.0<br>
     Lac: 2.0<br>
@@ -113,7 +113,7 @@ The output images are located in `docs/examples/png/`.
   </td>
   <td align="center">
     <img src="docs/examples/png/terrain_4.png" width="200"><br>
-    <b>Terrain 4</b><br>
+    <br>
     Freq: 0.5<br>
     Amp: 1.0<br>
     Lac: 2.0<br>
