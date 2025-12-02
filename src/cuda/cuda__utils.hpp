@@ -79,7 +79,9 @@ __host__ __device__ struct Vector2D {
  * @param t 
  * @return __device__ 
  */
-__device__ float fade(float t) ;
+__device__ float fade(float t) {
+    return t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
+}
 
 /**
  * @brief Linear interpolation function for CUDA device
@@ -89,4 +91,6 @@ __device__ float fade(float t) ;
  * @param t 
  * @return __device__ 
  */
-__device__ float lerp(float a, float b, float t) ;
+__device__ float lerp(float a, float b, float t) {
+    return a + t * (b - a);
+}

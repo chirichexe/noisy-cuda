@@ -39,6 +39,9 @@
 /* chunk variables */
 #define CHUNK_SIDE_LENGTH 32
 
+
+
+
 /*
  * Chunk - handles a sub-region of the image using global gradients
  */

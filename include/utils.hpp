@@ -58,8 +58,9 @@ struct Vector2D {
  * @param t 
  * @return float 
  */
-static float fade(float t);
-
+static float fade(float t) {
+    return t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
+}
 /** 
  * @brief Linear interpolation
  * 
@@ -68,4 +69,6 @@ static float fade(float t);
  * @param t 
  * @return float 
  */
-static float lerp(float a, float b, float t);
+static float lerp(float a, float b, float t) {
+    return a + t * (b - a);
+}

@@ -20,7 +20,7 @@ message(STATUS "Building CUDA backend version: ${CUDA_VERSION}")
 
 set(CUDA_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/cuda__perlin_noise_${CUDA_VERSION}.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/cuda__utils.cu"
+    #"${CMAKE_CURRENT_SOURCE_DIR}/cuda__utils.cu"
 )
 
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/cuda__perlin_noise_${CUDA_VERSION}.cu")

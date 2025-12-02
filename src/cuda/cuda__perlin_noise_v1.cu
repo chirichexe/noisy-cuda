@@ -42,7 +42,6 @@
 /* chunk variables */
 #define CHUNK_SIDE_LENGTH 32
 
-
 __global__ void gpu_generate_perlin_pixel(
     float * buffer, // reference to global float buffer
     int seed, 
@@ -55,20 +54,17 @@ __global__ void gpu_generate_perlin_pixel(
     int chunks_count_y,
     int offset_x,
     int offset_y
-)
-{
+) {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
 
-    if (x >= image_width || y >= image_height) return;
+    if ( x >= image_width || y >= image_height ) 
+        return;
 
-    // Placeholder: compute Perlin contribution using gradients, frequency, amplitude, offsets, etc.
-    // Replace the following line with the actual Perlin noise computation.
-    /* TEMP **************************** */
     // normalized coordinates scaled by frequency
-    float lerp_coeff =  image_width < image_height ? image_height : image_width;
-    float fx = ((float)(x + offset_x) / (float)lerp_coeff) * frequency;
-    float fy = ((float)(y + offset_y) / (float)lerp_coeff) * frequency;
+    //float lerp_coeff =  image_width < image_height ? image_height : image_width;
+    float fx = ((float)(x + offset_x) / (float)image_width) * frequency;
+    float fy = ((float)(y + offset_y) / (float)image_height) * frequency;
 
     // integer grid cell
     int x0 = (int)std::floor(fx);
