@@ -48,7 +48,8 @@ echo ""
 # Profiling (ncu) =============================================================
 echo "Starting profiling with NVIDIA Nsight Compute (ncu)..."
 
-# AGGIUNTO IL FLAG -f PER SOVRASCRIVERE IL FILE ESISTENTE
+# Using sudo is strongly discouraged, but sometimes necessary to access GPU profiling features
+# Make sure the user has the necessary permissions to run ncu without sudo if possible
 sudo ncu -f -o "${REPORT_FILE}" --target-processes all "./${BUILD_DIR}/noisy_cuda" -v
 
 if [ $? -ne 0 ]; then
@@ -63,7 +64,9 @@ echo "Profiling completed. Report saved to: ${REPORT_FILE}"
 echo ""
 echo "Opening the report in Nsight Compute GUI (ncu-ui)..."
 echo "NOTE: If the GUI does not open, you may need to launch it manually:"
+echo ""
 echo "ncu-ui ${REPORT_FILE}"
+echo ""
 
 # launch the GUI application in the background
 ncu-ui "${REPORT_FILE}" &
@@ -71,6 +74,7 @@ ncu-ui "${REPORT_FILE}" &
 if [ $? -ne 0 ]; then
     echo "Warning: 'ncu-ui' was not found or the launch failed."
     echo "Please open the report manually with 'ncu-ui ${REPORT_FILE}'"
+    echo ""
 fi
 
 echo "Test finished. Bye."

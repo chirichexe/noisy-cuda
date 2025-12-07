@@ -123,6 +123,17 @@ The output images are located in `docs/examples/png/`.
 </tr>
 </table>
 
+# Profiling
+
+You need **NVIDIA Nsight Compute**, typically installed with the CUDA Toolkit. Installation (Arch Linux example): `sudo pacman -S nsight-compute`
+> The profiling script uses `sudo` due to the need to access low-level GPU hardware counters. This is strongly discouraged for security reasons. Instead, ensure your user has the necessary permissions to access the device for profiling without `sudo`.
+
+Use the provided script, supplying the integer version of the CUDA code to be tested.
+
+```bash
+# Example: Profile CUDA version 3
+./tests/start-cuda-profiling-test.sh 2
+```
 
 ## License
 
