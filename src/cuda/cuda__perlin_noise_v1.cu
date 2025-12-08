@@ -27,16 +27,19 @@
 
 // Future ideas
 /*
-    - Generate gradients with a kernel
-    - Manage chunks and octaves on device
+    GENERAL:
+    - Add the permutations instead of gradients giant matrix
     - Check for variable types used on algorithm 
       (for example, float, char ... )
-    - try to convert the output on the wanted format 
-      directly on the kernel (not in CPU)
-    - Add the permutations instead of gradients giant matrix
-    - Adapt the algorithm execution to the device hardware capabilities
     - Limit the size of the variables of the image to avoid 
       crash or too large outputs
+    
+    FOR CUDA:
+    - Generate gradients with a kernel
+    - Manage chunks and octaves on device
+    - try to convert the output on the wanted format 
+      directly on the kernel (not in CPU)
+    - Adapt the algorithm execution to the device hardware capabilities
 */
 
 #include "perlin_noise.hpp"
@@ -68,7 +71,10 @@
 /* chunk variables */
 #define NOISE_GRID_CELL_SIZE 64
 
-
+/**
+ * @brief Kernel to generate Perlin noise for each pixel
+ *  
+ */
 __global__ void gpu_generate_perlin_pixel(
     float * buffer, // reference to global float buffer
     int seed, 

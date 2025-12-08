@@ -36,14 +36,23 @@
 #include <ctime>
 #include <iostream>
 
+// Future ideas
+/*
+    GENERAL:
+    - Add the permutations instead of gradients giant matrix
+    - Check for variable types used on algorithm 
+      (for example, float, char ... )
+    - Implement the different output formats
+    - Limit the size of the variables of the image to avoid 
+      crash or too large outputs
+*/
+
 /* chunk variables */
 #define CHUNK_SIDE_LENGTH 32
 
-
-
-
-/*
- * Chunk - handles a sub-region of the image using global gradients
+/**
+ * @brief Chunk: represents a square section of the noise map
+ * 
  */
 struct Chunk {
     int chunk_x = 0;
@@ -121,10 +130,6 @@ struct Chunk {
     }
 };
 
-
-/*
- * generate_perlin_noise - generates a 2D Perlin noise map using chunks
- */
 void generate_perlin_noise(const Options& opts) {
 
     /* initialize parameters */
