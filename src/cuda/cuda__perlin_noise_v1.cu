@@ -19,8 +19,31 @@
  * limitations under the License.
  */
 
+// Features
+/*
+    - Generate a perlin noise with octaves
+    - Use a kernel to calculate a perlin noise pixel
+*/
+
+// Future ideas
+/*
+    - Generate gradients with a kernel
+    - Manage chunks and octaves on device
+    - Check for variable types used on algorithm 
+      (for example, float, char ... )
+    - try to convert the output on the wanted format 
+      directly on the kernel (not in CPU)
+    - Add the permutations instead of gradients giant matrix
+    - Adapt the algorithm execution to the device hardware capabilities
+    - Limit the size of the variables of the image to avoid 
+      crash or too large outputs
+*/
+
 #include "perlin_noise.hpp"
 #include "cuda__utils.hpp"
+
+// suppress image lib warnings
+#pragma nv_diag_suppress 550
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -39,8 +62,12 @@
 #include <ctime>
 #include <iostream>
 
+/* device variables */
+#define BLOCK_SIZE 16
+
 /* chunk variables */
-#define CHUNK_SIDE_LENGTH 32
+#define NOISE_GRID_CELL_SIZE 64
+
 
 __global__ void gpu_generate_perlin_pixel(
     float * buffer, // reference to global float buffer
@@ -77,7 +104,7 @@ __global__ void gpu_generate_perlin_pixel(
     float sy = fy - (float)y0;
 
     // corner gradients (shared from global grid)
-    // Usa l'indice 1D: Index = y * num_cols + x
+    // uses 1D index: Index = y * num_cols + x
     int grad_x0 = x0 % chunks_count_x;
     int grad_y0 = y0 % chunks_count_y;
     int grad_x1 = x1 % chunks_count_x;
@@ -136,7 +163,6 @@ void generate_perlin_noise(const Options& opts) {
     // output info
     std::string output_filename = opts.output_filename;
 
-    /* CUDA PART 1 ***************************************/
     /* setting CUDA DEVICE */
     int dev = 0;
     cudaDeviceProp deviceProp;
@@ -144,29 +170,27 @@ void generate_perlin_noise(const Options& opts) {
     CHECK(cudaSetDevice(dev));
     
     /* allocate device memory for output */
-    
-    
-    dim3 block(CHUNK_SIDE_LENGTH, CHUNK_SIDE_LENGTH);
+    dim3 block(BLOCK_SIZE, BLOCK_SIZE);
     dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
-    /* END CUDA PART 1 *************************************** */
     
-    /* GENERATE GRADIENTS AND START KERNEL ************************ */
     /* float accumulation buffer (needed for octaves) */
+    // host accumulator
     std::vector<float> accumulator(width * height, 0.0f);
-    float * d_accumulator;
     
+    // device accumulator
     size_t buffer_size = width * height * sizeof(float);
+    float * d_accumulator;
     CHECK(cudaMalloc((void **)&d_accumulator, buffer_size));
     
-    /* calculate chunk grid */
-    int chunks_count_x = (width  + CHUNK_SIDE_LENGTH - 1) / CHUNK_SIDE_LENGTH;
-    int chunks_count_y = (height + CHUNK_SIDE_LENGTH - 1) / CHUNK_SIDE_LENGTH;
+    /* calculate chunk grid size */
+    int chunks_count_x = (width  + NOISE_GRID_CELL_SIZE - 1) / NOISE_GRID_CELL_SIZE;
+    int chunks_count_y = (height + NOISE_GRID_CELL_SIZE - 1) / NOISE_GRID_CELL_SIZE;
     
     /* initialize gradient vectors */
+    // host gradient vectors
     int gradients_size = chunks_count_x * chunks_count_y;
-    std::vector<Vector2D> h_gradients(gradients_size); // Host gradients
+    std::vector<Vector2D> h_gradients(gradients_size);
     
-
     for (int gx = 0; gx < chunks_count_x; gx++) {
         for (int gy = 0; gy < chunks_count_y; gy++) {
             float rx = (float)rand() / RAND_MAX * 2.0f - 1.0f;
@@ -177,12 +201,12 @@ void generate_perlin_noise(const Options& opts) {
         }
     }
 
-    // ALLOCARE DEVICE MEMORY PER GRADIENTI
+    // device gradient vectors
     Vector2D* d_gradients;
     size_t gradients_buffer_size = gradients_size * sizeof(Vector2D);
     CHECK(cudaMalloc((void **)&d_gradients, gradients_buffer_size));
-    
-    // COPIA HOST -> DEVICE
+
+    // host -> device copy
     CHECK(cudaMemcpy(d_gradients, h_gradients.data(), gradients_buffer_size, cudaMemcpyHostToDevice));
     
     /* octave loop */
@@ -191,16 +215,16 @@ void generate_perlin_noise(const Options& opts) {
     
     for (int o = 0; o < octaves; o++) {
         
-        // generate noise for this octave using the existing chunk pipeline
+        /* launch the kernel */
+        // generate noise for this octave using the chunk pipeline
         gpu_generate_perlin_pixel<<<grid, block>>>(d_accumulator, seed, width, height, d_gradients, frequency, amplitude, chunks_count_x, chunks_count_y, offset_x, offset_y);
 
         frequency *= lacunarity;   // controls frequency growth
         amplitude *= persistence;  // controls amplitude decay
     }
 
-    /* Launch the kernel */
     
-    /* Wait for kernel to complete */
+    /* wait for kernel to complete */
     CHECK(cudaDeviceSynchronize());
    
     /* copy and free the result from the device to the output pointer */
@@ -222,7 +246,6 @@ void generate_perlin_noise(const Options& opts) {
         output[i] = static_cast<unsigned char>((v + 1.0f) * 0.5f * 255.0f);
     }
 
-    
     /* save the generated noise image */
     stbi_write_png(output_filename.c_str(), width, height, channels, output.data(), width * channels);
     printf("\nOutput saved as \"%s\"\n", output_filename.c_str());

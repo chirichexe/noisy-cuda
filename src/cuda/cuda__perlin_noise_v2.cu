@@ -40,7 +40,7 @@
 #include <iostream>
 
 /* chunk variables */
-#define CHUNK_SIDE_LENGTH 64
+#define CHUNK_SIDE_LENGTH 16
 
 __global__ void gpu_generate_perlin_pixel(
     float * buffer, // reference to global float buffer

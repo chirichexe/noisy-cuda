@@ -48,12 +48,13 @@
  * @brief Simple 2D vector structure
  * 
  */
-__host__ __device__ struct Vector2D {
+struct Vector2D {
     float x = 0.0f;
     float y = 0.0f;
 
-     __host__ __device__ Vector2D() = default;
-     __host__ __device__ Vector2D(float x_, float y_) : x(x_), y(y_) {}
+    Vector2D() = default;
+
+    __host__ __device__ Vector2D(float x_, float y_) : x(x_), y(y_) {}
 
     __host__ __device__ Vector2D operator-(const Vector2D& other) const {
         return {x - other.x, y - other.y};
