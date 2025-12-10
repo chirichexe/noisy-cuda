@@ -1,5 +1,5 @@
 /*
- * utils.cpp - utility function for noisy-cuda
+ * utils_cpu.cpp - utility function for noisy-cuda, CPU implementations
  *
  */
 

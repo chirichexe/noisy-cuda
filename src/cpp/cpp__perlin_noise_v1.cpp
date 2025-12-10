@@ -20,12 +20,9 @@
  */
 
 #include "perlin_noise.hpp"
-#include "utils.hpp"
+#include "utils_global.hpp"
+#include "utils_cpu.hpp"
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
 
 #include <algorithm>
 #include <inttypes.h>
@@ -49,16 +46,6 @@
 
 /* chunk variables */
 #define CHUNK_SIDE_LENGTH 32
-
-/*  */
-void save_output(
-    const std::vector<unsigned char>& output_data,
-    int width,
-    int height,
-    unsigned int channels,
-    const std::string& filename_in,
-    const std::string& format_str 
-);
 
 /**
  * @brief Chunk: represents a square section of the noise map
@@ -154,6 +141,8 @@ void generate_perlin_noise(const Options& opts) {
     float persistence = opts.persistence;
     int offset_x = opts.offset_x;
     int offset_y = opts.offset_y;
+    bool no_outputs = opts.no_outputs;
+    bool verbose = opts.verbose;
 
     // output info
     std::string output_filename = opts.output_filename;
@@ -165,7 +154,7 @@ void generate_perlin_noise(const Options& opts) {
     /* start profiling timers */
     std::chrono::high_resolution_clock::time_point wall_start;
     clock_t cpu_start = 0;
-    if (opts.verbose) {
+    if (verbose) {
         wall_start = std::chrono::high_resolution_clock::now();
         cpu_start = std::clock();
     }
@@ -221,7 +210,7 @@ void generate_perlin_noise(const Options& opts) {
     }
 
     /* stop profiling timers and report */
-    if (opts.verbose) {
+    if (verbose) {
         clock_t cpu_end = std::clock();
         auto wall_end = std::chrono::high_resolution_clock::now();
 
@@ -263,121 +252,15 @@ void generate_perlin_noise(const Options& opts) {
     //stbi_write_png(output_filename.c_str(), width, height, channels, output.data(), width * channels);
     //printf("\nOutput saved as \"%s\"\n", output_filename.c_str());
 
-    save_output(
-        output,
-        width,
-        height,
-        channels,
-        output_filename,
-        output_format
-    );
-
-}
-
-/**
- * @brief Saves the pixel buffer in various formats (PNG, RAW, CSV, PPM).
- */
-void save_output(
-    const std::vector<unsigned char>& output_data,
-    int width,
-    int height,
-    unsigned int channels,
-    const std::string& filename_in,
-    const std::string& format_str 
-) {
-    // Normalize the format string to lowercase
-    std::string format = format_str;
-    std::transform(format.begin(), format.end(), format.begin(), 
-                   [](unsigned char c){ return std::tolower(c); });
-
-    // Determine the correct extension for the output filename
-    std::string extension;
-    if (format == "png") {
-        extension = ".png";
-    } else if (format == "raw") {
-        extension = ".raw";
-    } else if (format == "csv") {
-        extension = ".csv";
-    } else if (format == "ppm") {
-        extension = ".ppm";
-    } else {
-        // Fallback: PNG
-        fprintf(stderr, "Warning: Unknown output format '%s'. Defaulting to PNG.\n", format_str.c_str());
-        format = "png";
-        extension = ".png";
-    }
-    
-    // Assume filename_in is already normalized or contains the correct extension.
-    // However, we ensure the filename *ends* with the correct extension for the chosen format.
-    std::string filename = filename_in;
-    
-    // Check if filename_in already has the required extension.
-    if (filename.size() < extension.size() || 
-        filename.substr(filename.size() - extension.size()) != extension) 
-    {
-        // If the file doesn't end with the determined extension, append it.
-        // This ensures "perlin" + "png" -> "perlin.png", but "perlin.csv" + "png" -> "perlin.csv.png" 
-        // which might be undesirable. Given your constraint, we'll append it safely.
-        filename += extension;
+    if (!no_outputs){
+        save_output(
+            output,
+            width,
+            height,
+            channels,
+            output_filename,
+            output_format
+        );
     }
 
-
-    // Save the output
-
-    if (format == "png") {
-        // PNG (uses stb_image_write)
-        int success = stbi_write_png(filename.c_str(), width, height, channels, output_data.data(), width * channels);
-        if (success) {
-            printf("\nOutput saved as \"%s\"\n", filename.c_str());
-        } else {
-            fprintf(stderr, "ERROR: Could not write PNG file %s\n", filename.c_str());
-        }
-    } else if (format == "raw") {
-        // RAW (binary raw data)
-        std::ofstream file(filename, std::ios::binary);
-        if (file.is_open()) {
-            file.write(reinterpret_cast<const char*>(output_data.data()), output_data.size());
-            file.close();
-            printf("\nOutput saved as RAW file \"%s\"\n", filename.c_str());
-        } else {
-            fprintf(stderr, "ERROR: Could not open RAW file %s for writing.\n", filename.c_str());
-        }
-    } else if (format == "csv") {
-        // CSV (comma-separated textual data)
-        std::ofstream file(filename);
-        if (file.is_open()) {
-            file << "Width," << width << "\n";
-            file << "Height," << height << "\n";
-            file << "Channels," << channels << "\n";
-
-            size_t index = 0;
-            for (int y = 0; y < height; y++) {
-                for (int x = 0; x < width; x++) {
-                    file << (int)output_data[index]; 
-                    index += channels; 
-                    if (x < width - 1) {
-                        file << ",";
-                    }
-                }
-                file << "\n";
-            }
-            file.close();
-            printf("\nOutput saved as CSV file \"%s\"\n", filename.c_str());
-        } else {
-            fprintf(stderr, "ERROR: Could not open CSV file %s for writing.\n", filename.c_str());
-        }
-    } else if (format == "ppm") {
-        // PPM (Portable Graymap P5 binary format)
-        std::ofstream file(filename, std::ios::binary);
-        if (file.is_open()) {
-            file << "P5\n"; 
-            file << width << " " << height << "\n";
-            file << "255\n"; // Max value
-            file.write(reinterpret_cast<const char*>(output_data.data()), output_data.size());
-            file.close();
-            printf("\nOutput saved as PPM (P5) file \"%s\"\n", filename.c_str());
-        } else {
-            fprintf(stderr, "ERROR: Could not open PPM file %s for writing.\n", filename.c_str());
-        }
-    }
 }

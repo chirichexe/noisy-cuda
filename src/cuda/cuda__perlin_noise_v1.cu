@@ -40,18 +40,20 @@
     - try to convert the output on the wanted format 
       directly on the kernel (not in CPU)
     - Adapt the algorithm execution to the device hardware capabilities
+      (for example, block_size )
+      - remove std functions from kernel
+
+      PROF LEZIONE
+    Non usare double usa float
+    Evitare funzioni della std library all'interno del kernel
+    Usare tipi di dato più piccoli (es char)
+    Evitare if all'interno del kernel
+    
 */
 
+#include "utils_global.hpp"
+#include "utils_cuda.hpp"
 #include "perlin_noise.hpp"
-#include "cuda__utils.hpp"
-
-// suppress image lib warnings
-#pragma nv_diag_suppress 550
-
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
 
 #include <cuda_runtime.h>
 #include <stdio.h>
@@ -67,7 +69,7 @@
 #include <fstream>
 
 /* device variables */
-#define BLOCK_SIZE 16
+#define BLOCK_SIZE 32
 
 /* chunk variables */
 #define NOISE_GRID_CELL_SIZE 64
@@ -166,10 +168,15 @@ void generate_perlin_noise(const Options& opts) {
     float persistence = opts.persistence;
     int offset_x = opts.offset_x;
     int offset_y = opts.offset_y;
+    bool no_outputs = opts.no_outputs;
+    bool verbose = opts.verbose;
 
     // output info
     std::string output_filename = opts.output_filename;
     std::string output_format = opts.format;
+
+    /* start profiling timers */
+    auto start_total = std::chrono::high_resolution_clock::now();
 
     /* setting CUDA DEVICE */
     int dev = 0;
@@ -189,6 +196,9 @@ void generate_perlin_noise(const Options& opts) {
     size_t buffer_size = width * height * sizeof(float);
     float * d_accumulator;
     CHECK(cudaMalloc((void **)&d_accumulator, buffer_size));
+
+    // initialize device accumulator to zero
+    CHECK(cudaMemset(d_accumulator, 0, buffer_size));
     
     /* calculate chunk grid size */
     int chunks_count_x = (width  + NOISE_GRID_CELL_SIZE - 1) / NOISE_GRID_CELL_SIZE;
@@ -216,6 +226,14 @@ void generate_perlin_noise(const Options& opts) {
 
     // host -> device copy
     CHECK(cudaMemcpy(d_gradients, h_gradients.data(), gradients_buffer_size, cudaMemcpyHostToDevice));
+
+    /* CUDA Events for Kernel Timing */
+    cudaEvent_t start_kernel, stop_kernel;
+    CHECK(cudaEventCreate(&start_kernel));
+    CHECK(cudaEventCreate(&stop_kernel));
+
+    /* Start Kernel Timer */
+    CHECK(cudaEventRecord(start_kernel, 0));
     
     /* octave loop */
     float frequency = base_frequency;
@@ -231,14 +249,34 @@ void generate_perlin_noise(const Options& opts) {
         amplitude *= persistence;  // controls amplitude decay
     }
 
+    /* Stop Kernel Timer */
+    CHECK(cudaEventRecord(stop_kernel, 0));
     
     /* wait for kernel to complete */
     CHECK(cudaDeviceSynchronize());
+
+    /* Calculate Kernel Time */
+    float kernel_ms = 0.0f;
+    CHECK(cudaEventElapsedTime(&kernel_ms, start_kernel, stop_kernel));
    
     /* copy and free the result from the device to the output pointer */
     CHECK(cudaMemcpy(accumulator.data(), d_accumulator, buffer_size, cudaMemcpyDeviceToHost));
     CHECK(cudaFree(d_accumulator));
     CHECK(cudaFree(d_gradients));
+
+    /* Destroy CUDA Events */
+    CHECK(cudaEventDestroy(start_kernel));
+    CHECK(cudaEventDestroy(stop_kernel));
+
+    /* Stop Total Time Measurement */
+    auto end_total = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> total_s = end_total - start_total;
+
+    if (verbose) {
+        printf("\nProfing:\n");
+        printf("  kernel Time       = %.3f ms\n", kernel_ms);
+        printf("  total Time        = %.3f s\n", total_s.count());
+    }
 
     /* convert accumulator to final 0-255 output */
     unsigned int channels = 1;
@@ -254,126 +292,16 @@ void generate_perlin_noise(const Options& opts) {
         output[i] = static_cast<unsigned char>((v + 1.0f) * 0.5f * 255.0f);
     }
 
-    /* save the generated noise image */
-    //stbi_write_png(output_filename.c_str(), width, height, channels, output.data(), width * channels);
-    //printf("\nOutput saved as \"%s\"\n", output_filename.c_str());
-
-    save_output(
-        output,
-        width,
-        height,
-        channels,
-        output_filename,
-        output_format
-    );
-
-}
-
-
-/**
- * @brief Saves the pixel buffer in various formats (PNG, RAW, CSV, PPM).
- */
-void save_output(
-    const std::vector<unsigned char>& output_data,
-    int width,
-    int height,
-    unsigned int channels,
-    const std::string& filename_in,
-    const std::string& format_str 
-) {
-    // Normalize the format string to lowercase
-    std::string format = format_str;
-    std::transform(format.begin(), format.end(), format.begin(), 
-                   [](unsigned char c){ return std::tolower(c); });
-
-    // Determine the correct extension for the output filename
-    std::string extension;
-    if (format == "png") {
-        extension = ".png";
-    } else if (format == "raw") {
-        extension = ".raw";
-    } else if (format == "csv") {
-        extension = ".csv";
-    } else if (format == "ppm") {
-        extension = ".ppm";
-    } else {
-        // Fallback: PNG
-        fprintf(stderr, "Warning: Unknown output format '%s'. Defaulting to PNG.\n", format_str.c_str());
-        format = "png";
-        extension = ".png";
-    }
-    
-    // Assume filename_in is already normalized or contains the correct extension.
-    // However, we ensure the filename *ends* with the correct extension for the chosen format.
-    std::string filename = filename_in;
-    
-    // Check if filename_in already has the required extension.
-    if (filename.size() < extension.size() || 
-        filename.substr(filename.size() - extension.size()) != extension) 
-    {
-        // If the file doesn't end with the determined extension, append it.
-        // This ensures "perlin" + "png" -> "perlin.png", but "perlin.csv" + "png" -> "perlin.csv.png" 
-        // which might be undesirable. Given your constraint, we'll append it safely.
-        filename += extension;
-    }
-
-
-    // Save the output
-
-    if (format == "png") {
-        // PNG (uses stb_image_write)
-        int success = stbi_write_png(filename.c_str(), width, height, channels, output_data.data(), width * channels);
-        if (success) {
-            printf("\nOutput saved as \"%s\"\n", filename.c_str());
-        } else {
-            fprintf(stderr, "ERROR: Could not write PNG file %s\n", filename.c_str());
-        }
-    } else if (format == "raw") {
-        // RAW (binary raw data)
-        std::ofstream file(filename, std::ios::binary);
-        if (file.is_open()) {
-            file.write(reinterpret_cast<const char*>(output_data.data()), output_data.size());
-            file.close();
-            printf("\nOutput saved as RAW file \"%s\"\n", filename.c_str());
-        } else {
-            fprintf(stderr, "ERROR: Could not open RAW file %s for writing.\n", filename.c_str());
-        }
-    } else if (format == "csv") {
-        // CSV (comma-separated textual data)
-        std::ofstream file(filename);
-        if (file.is_open()) {
-            file << "Width," << width << "\n";
-            file << "Height," << height << "\n";
-            file << "Channels," << channels << "\n";
-
-            size_t index = 0;
-            for (int y = 0; y < height; y++) {
-                for (int x = 0; x < width; x++) {
-                    file << (int)output_data[index]; 
-                    index += channels; 
-                    if (x < width - 1) {
-                        file << ",";
-                    }
-                }
-                file << "\n";
-            }
-            file.close();
-            printf("\nOutput saved as CSV file \"%s\"\n", filename.c_str());
-        } else {
-            fprintf(stderr, "ERROR: Could not open CSV file %s for writing.\n", filename.c_str());
-        }
-    } else if (format == "ppm") {
-        // PPM (Portable Graymap P5 binary format)
-        std::ofstream file(filename, std::ios::binary);
-        if (file.is_open()) {
-            file << "P5\n"; 
-            file << width << " " << height << "\n";
-            file << "255\n"; // Max value
-            file.write(reinterpret_cast<const char*>(output_data.data()), output_data.size());
-            file.close();
-            printf("\nOutput saved as PPM (P5) file \"%s\"\n", filename.c_str());
-        } else {
-            fprintf(stderr, "ERROR: Could not open PPM file %s for writing.\n", filename.c_str());
-        }
+    if (!no_outputs){
+        save_output(
+            output,
+            width,
+            height,
+            channels,
+            output_filename,
+            output_format
+        );
     }
 }
+
+

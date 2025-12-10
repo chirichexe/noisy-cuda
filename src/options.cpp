@@ -46,6 +46,7 @@ Options parse_options(int argc, char** argv) {
         "  -f, --format <string>     Output format: png, raw, csv, ppm. Default: png\n"
         "  -s, --size <WxH>          Output size in pixels (width x height). Default: 2048x2048\n"
         "  -v, --verbose             Print processing steps and timings\n"
+        "  -n, --no-output           Disable output file generation\n"
         "\n"
         "  Perlin noise generation options:\n\n"
         "  -F, --frequency <float>   Base frequency (scale factor). Default: 1.0\n"
@@ -89,6 +90,11 @@ Options parse_options(int argc, char** argv) {
         else if (arg == "-o" || arg == "--output") {
             if (i + 1 >= argc) throw std::invalid_argument("Missing value for --output");
             opts.output_filename = argv[++i];
+        }
+
+        // No output option (help order: -n)
+        else if (arg == "-n" || arg == "--no-output") {
+            opts.no_outputs = true;
         }
 
         // Format option (help order: -f)

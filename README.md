@@ -55,6 +55,7 @@ cmake --build build_cpp
 | `-f` | `--format` | `<string>` | `png` | Output format. Supported: `png`, `raw`, `csv`, `ppm`. |
 | `-s` | `--size` | `<WxH>` | `2048x2048` | Output size in pixels (width x height). |
 | `-v` | `--verbose` | none | `false` | Print processing steps and timings. |
+| `-n` | `--no-output` | `none` | `false` | Disable output file generation. |
 | `-F` | `--frequency` | `<float>` | `1.0` | Base frequency (scale factor). |
 | `-A` | `--amplitude` | `<float>` | `1.0` | Base amplitude. |
 | `-L` | `--lacunarity` | `<float>` | `2.0` | Frequency multiplier per octave. |
