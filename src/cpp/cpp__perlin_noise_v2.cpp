@@ -10,7 +10,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * Distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,12 +20,8 @@
  */
 
 #include "perlin_noise.hpp"
-#include "utils.hpp"
-
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
+#include "utils_global.hpp"
+#include "utils_cpu.hpp"
 
 #include <algorithm>
 #include <inttypes.h>
@@ -35,25 +31,29 @@
 #include <chrono>
 #include <ctime>
 #include <iostream>
-
-// Future ideas
-/*
-    GENERAL:
-    - Add the permutations instead of gradients giant matrix
-    - Check for variable types used on algorithm 
-      (for example, float, char ... )
-    - Implement the different output formats
-    - Limit the size of the variables of the image to avoid 
-      crash or too large outputs
-*/
+#include <fstream>
+#include <numeric> // Added for std::iota
+#include <random>  // Added for std::default_random_engine
 
 /* chunk variables */
 #define CHUNK_SIDE_LENGTH 32
 
 /**
- * @brief Chunk: represents a square section of the noise map
- * 
+ * @brief Helper function to calculate dot product based on hash.
+ * This replaces storing Vector2D objects. It picks a gradient vector
+ * based on the hash value and returns the dot product with input (x,y).
  */
+inline float grad(int hash, float x, float y) {
+    // Convert low 4 bits of hash code into 12 gradient directions
+    int h = hash & 15;
+    float u = h < 8 ? x : y;
+    float v = h < 4 ? y : ((h == 12 || h == 14) ? x : 0);
+    return ((h & 1) == 0 ? u : -u) + ((h & 2) == 0 ? v : -v);
+}
+
+/**
+ * @brief Chunk: represents a square section of the noise map
+ * */
 struct Chunk {
     int chunk_x = 0;
     int chunk_y = 0;
@@ -64,9 +64,7 @@ struct Chunk {
         std::vector<float>& buffer, // reference to global float buffer
         int image_width,
         int image_height,
-        const std::vector<std::vector<Vector2D>>& gradients,
-        int chunks_count_x,
-        int chunks_count_y,
+        const std::vector<int>& p, // CHANGED: Pass permutation table instead of gradients
         float frequency,
         float amplitude,
         int offset_x,
@@ -86,37 +84,33 @@ struct Chunk {
                 float fx = ((float)(x + offset_x) / (float)lerp_coeff) * frequency;
                 float fy = ((float)(y + offset_y) / (float)lerp_coeff) * frequency;
 
-                // integer grid cell
-                int x0 = (int)std::floor(fx);
-                int y0 = (int)std::floor(fy);
-                int x1 = x0 + 1;
-                int y1 = y0 + 1;
+                // Find unit grid cell containing point
+                int X = (int)std::floor(fx) & 255;
+                int Y = (int)std::floor(fy) & 255;
 
-                // local coordinates within the cell
-                float sx = fx - (float)x0;
-                float sy = fy - (float)y0;
-
-                // corner gradients (shared from global grid)
-                const Vector2D& g00 = gradients[x0 % chunks_count_x][y0 % chunks_count_y];  // tl
-                const Vector2D& g10 = gradients[x1 % chunks_count_x][y0 % chunks_count_y];  // tr
-                const Vector2D& g01 = gradients[x0 % chunks_count_x][y1 % chunks_count_y];  // bl
-                const Vector2D& g11 = gradients[x1 % chunks_count_x][y1 % chunks_count_y];  // br
-
-                // distance vectors
-                Vector2D d00(sx,     sy);
-                Vector2D d10(sx - 1, sy);
-                Vector2D d01(sx,     sy - 1);
-                Vector2D d11(sx - 1, sy - 1);
-
-                // dot products
-                float dot00 = g00.dot(d00);
-                float dot10 = g10.dot(d10);
-                float dot01 = g01.dot(d01);
-                float dot11 = g11.dot(d11);
+                // local coordinates within the cell (relative to top-left)
+                float sx = fx - std::floor(fx);
+                float sy = fy - std::floor(fy);
 
                 // fade curves
                 float u = fade(sx);
                 float v = fade(sy);
+
+                // Hash coordinates of the 4 square corners
+                // This replaces the 2D array lookups
+                int A  = p[X] + Y;
+                int AA = p[A];
+                int AB = p[A + 1];
+                int B  = p[X + 1] + Y;
+                int BA = p[B];
+                int BB = p[B + 1];
+
+                // Calculate dot products for the 4 corners
+                // grad() handles the gradient vector selection implicitly
+                float dot00 = grad(p[AA], sx, sy);         // Top-Left
+                float dot10 = grad(p[BA], sx - 1, sy);     // Top-Right
+                float dot01 = grad(p[AB], sx, sy - 1);     // Bottom-Left
+                float dot11 = grad(p[BB], sx - 1, sy - 1); // Bottom-Right
 
                 // bilinear interpolation
                 float nx0 = lerp(dot00, dot10, u);
@@ -124,7 +118,7 @@ struct Chunk {
                 float value = lerp(nx0, nx1, v);
 
                 // multiply by amplitude for THIS octave
-                buffer[y * image_width + x] += value * amplitude;  // ADDED: accumulate float noise
+                buffer[y * image_width + x] += value * amplitude; 
             }
         }
     }
@@ -144,9 +138,12 @@ void generate_perlin_noise(const Options& opts) {
     float persistence = opts.persistence;
     int offset_x = opts.offset_x;
     int offset_y = opts.offset_y;
+    bool no_outputs = opts.no_outputs;
+    bool verbose = opts.verbose;
 
     // output info
     std::string output_filename = opts.output_filename;
+    std::string output_format = opts.format;
 
     /* randomize from seed */
     srand(seed);
@@ -154,7 +151,7 @@ void generate_perlin_noise(const Options& opts) {
     /* start profiling timers */
     std::chrono::high_resolution_clock::time_point wall_start;
     clock_t cpu_start = 0;
-    if (opts.verbose) {
+    if (verbose) {
         wall_start = std::chrono::high_resolution_clock::now();
         cpu_start = std::clock();
     }
@@ -166,15 +163,20 @@ void generate_perlin_noise(const Options& opts) {
     int chunks_count_x = (width  + CHUNK_SIDE_LENGTH - 1) / CHUNK_SIDE_LENGTH;
     int chunks_count_y = (height + CHUNK_SIDE_LENGTH - 1) / CHUNK_SIDE_LENGTH;
 
-    /* initialize gradient vectors */
-    std::vector<std::vector<Vector2D>> gradients(chunks_count_x, std::vector<Vector2D>(chunks_count_y));
+    /* Generate Permutation Table */
+    // Standard Perlin permutation table (0-255)
+    std::vector<int> p(512); 
+    
+    // Fill first 256 with 0-255
+    std::iota(p.begin(), p.begin() + 256, 0);
 
-    for (int gx = 0; gx < chunks_count_x; gx++) {
-        for (int gy = 0; gy < chunks_count_y; gy++) {
-            float rx = (float)rand() / RAND_MAX * 2.0f - 1.0f;
-            float ry = (float)rand() / RAND_MAX * 2.0f - 1.0f;
-            gradients[gx][gy] = Vector2D(rx, ry).normalize();
-        }
+    // Shuffle using the seed
+    std::default_random_engine engine(seed);
+    std::shuffle(p.begin(), p.begin() + 256, engine);
+
+    // Duplicate the permutation to avoid buffer overflow
+    for(int i = 0; i < 256; i++) {
+        p[256 + i] = p[i];
     }
 
     /* octave loop */
@@ -192,10 +194,8 @@ void generate_perlin_noise(const Options& opts) {
                     accumulator,
                     width,
                     height,
-                    gradients,
-                    chunks_count_x,
-                    chunks_count_y,
-                    frequency,
+                    p, // Pass the permutation vector
+                    frequency, // Removed chunk counts from args as they aren't needed for hashing
                     amplitude,
                     offset_x,
                     offset_y
@@ -204,13 +204,12 @@ void generate_perlin_noise(const Options& opts) {
         }
 
         // prepare next octave (standard FBM rules)
-        // https://medium.com/@logan.margo314/procedural-generation-using-fractional-brownian-motion-b35b7231309f
         frequency *= lacunarity;   // controls frequency growth
         amplitude *= persistence;  // controls amplitude decay
     }
 
     /* stop profiling timers and report */
-    if (opts.verbose) {
+    if (verbose) {
         clock_t cpu_end = std::clock();
         auto wall_end = std::chrono::high_resolution_clock::now();
 
@@ -221,17 +220,17 @@ void generate_perlin_noise(const Options& opts) {
         size_t num_pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
         double ms_per_pixel = (num_pixels > 0) ? (wall_ms / (double)num_pixels) : 0.0;
 
-        size_t gradients_bytes = (size_t)chunks_count_x * (size_t)chunks_count_y * sizeof(Vector2D);
+        size_t perm_bytes = p.size() * sizeof(int);
         size_t accumulator_bytes = accumulator.size() * sizeof(float);
-        size_t estimated_total_alloc = gradients_bytes + accumulator_bytes;
+        size_t estimated_total_alloc = perm_bytes + accumulator_bytes;
 
         printf("\nProfiling:\n");
         printf("  wall time        = %.3f ms\n", wall_ms);
         printf("  cpu time         = %.6f s (clock ticks = %.0f)\n", cpu_seconds, cpu_ticks);
         printf("  time / pixel     = %.6f ms\n", ms_per_pixel);
         printf("  chunks           = %dx%d (total %d)\n", chunks_count_x, chunks_count_y, chunks_count_x * chunks_count_y);
-        printf("  mem (approx)     = %zu bytes (gradients %zu + accumulator %zu)\n",
-               estimated_total_alloc, gradients_bytes, accumulator_bytes);
+        printf("  mem (approx)     = %zu bytes (permutation %zu + accumulator %zu)\n",
+               estimated_total_alloc, perm_bytes, accumulator_bytes);
     }
 
     /* convert accumulator to final 0-255 output */
@@ -241,14 +240,23 @@ void generate_perlin_noise(const Options& opts) {
     for (int i = 0; i < width * height; i++) {
 
         // normalize fractal sum back to [-1,1]
+        // Note: Perlin noise with sqrt(N/2) usually stays within range, 
+        // but with multiple octaves, we might exceed [-1, 1].
+        // Simple clamping is usually sufficient for visual output.
         float v = accumulator[i];
-
         v = std::clamp(v, -1.0f, 1.0f);
 
         output[i] = static_cast<unsigned char>((v + 1.0f) * 0.5f * 255.0f);
     }
 
-    /* save the generated noise image */
-    stbi_write_png(output_filename.c_str(), width, height, channels, output.data(), width * channels);
-    printf("\nOutput saved as \"%s\"\n", output_filename.c_str());
+    if (!no_outputs){
+        save_output(
+            output,
+            width,
+            height,
+            channels,
+            output_filename,
+            output_format
+        );
+    }
 }

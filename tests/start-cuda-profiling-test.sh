@@ -50,7 +50,7 @@ echo "Starting profiling with NVIDIA Nsight Compute (ncu)..."
 
 # Using sudo is strongly discouraged, but sometimes necessary to access GPU profiling features
 # Make sure the user has the necessary permissions to run ncu without sudo if possible
-sudo ncu -f -o "${REPORT_FILE}" --target-processes all "./${BUILD_DIR}/noisy_cuda" -v
+sudo ncu -f -o "${REPORT_FILE}" --target-processes all "./${BUILD_DIR}/noisy_cuda" -n -v
 
 if [ $? -ne 0 ]; then
     echo "Error during ncu execution. Check permissions or executable path."

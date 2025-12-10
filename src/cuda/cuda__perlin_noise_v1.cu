@@ -268,16 +268,6 @@ void generate_perlin_noise(const Options& opts) {
     CHECK(cudaEventDestroy(start_kernel));
     CHECK(cudaEventDestroy(stop_kernel));
 
-    /* Stop Total Time Measurement */
-    auto end_total = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> total_s = end_total - start_total;
-
-    if (verbose) {
-        printf("\nProfiling:\n");
-        printf("  kernel Time       = %.3f ms\n", kernel_ms);
-        printf("  total Time        = %.3f s\n", total_s.count());
-    }
-
     /* convert accumulator to final 0-255 output */
     unsigned int channels = 1;
     std::vector<unsigned char> output(width * height * channels, 0);
@@ -290,6 +280,16 @@ void generate_perlin_noise(const Options& opts) {
         v = std::clamp(v, -1.0f, 1.0f);
 
         output[i] = static_cast<unsigned char>((v + 1.0f) * 0.5f * 255.0f);
+    }
+
+    /* Stop Total Time Measurement */
+    auto end_total = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> total_s = end_total - start_total;
+
+    if (verbose) {
+        printf("\nProfiling:\n");
+        printf("  kernel Time       = %.3f ms\n", kernel_ms);
+        printf("  total Time        = %.3f s\n", total_s.count());
     }
 
     if (!no_outputs){
