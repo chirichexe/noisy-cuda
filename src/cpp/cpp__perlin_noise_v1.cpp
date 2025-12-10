@@ -94,6 +94,13 @@ struct Chunk {
                 float sy = fy - (float)y0;
 
                 // corner gradients (shared from global grid)
+                /*
+                const Vector2D& g00 = gradients[x0 % chunks_count_x][y0 % chunks_count_y];  // tl
+                const Vector2D& g10 = gradients[x1 % chunks_count_x][y0 % chunks_count_y];  // tr
+                const Vector2D& g01 = gradients[x0 % chunks_count_x][y1 % chunks_count_y];  // bl
+                const Vector2D& g11 = gradients[x1 % chunks_count_x][y1 % chunks_count_y];  // br
+                */
+
                 const Vector2D& g00 = gradients[x0 % chunks_count_x][y0 % chunks_count_y];  // tl
                 const Vector2D& g10 = gradients[x1 % chunks_count_x][y0 % chunks_count_y];  // tr
                 const Vector2D& g01 = gradients[x0 % chunks_count_x][y1 % chunks_count_y];  // bl

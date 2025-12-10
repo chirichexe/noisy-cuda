@@ -273,7 +273,7 @@ void generate_perlin_noise(const Options& opts) {
     std::chrono::duration<double> total_s = end_total - start_total;
 
     if (verbose) {
-        printf("\nProfing:\n");
+        printf("\nProfiling:\n");
         printf("  kernel Time       = %.3f ms\n", kernel_ms);
         printf("  total Time        = %.3f s\n", total_s.count());
     }
