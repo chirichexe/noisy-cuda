@@ -175,6 +175,9 @@ void generate_perlin_noise(const Options& opts) {
     std::string output_filename = opts.output_filename;
     std::string output_format = opts.format;
 
+    /* randomize from seed */
+    srand(seed);
+
     /* start profiling timers */
     auto start_total = std::chrono::high_resolution_clock::now();
 

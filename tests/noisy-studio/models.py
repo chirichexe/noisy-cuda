@@ -3,14 +3,22 @@ from dataclasses import dataclass
 @dataclass
 class NoiseParams:
     """Data structure holding all noise generation parameters."""
-    impl: str
+    
+    # output settings
+    width: int
+    height: int
+    
+    # perlin settings
     seed: int
     frequency: float
     amplitude: float
     octaves: int
     persistence: float
+    lacunarity: float
+    
+    # offset settings
     offset_x: int
     offset_y: int
 
     def get_offset_str(self) -> str:
-        return f"{self.offset_x},{self.offset_y}"
+        return "{},{}".format(int(self.offset_x), int(self.offset_y))
