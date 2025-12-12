@@ -114,10 +114,11 @@ __global__ void gpu_generate_perlin_pixel(
 
     // corner gradients (shared from global grid)
     // uses 1D index: Index = y * num_cols + x
-    int grad_x0 = x0 % chunks_count_x;
-    int grad_y0 = y0 % chunks_count_y;
-    int grad_x1 = x1 % chunks_count_x;
-    int grad_y1 = y1 % chunks_count_y;
+    // Use positive modulo for proper wrapping with negative indices
+    int grad_x0 = ((x0 % chunks_count_x) + chunks_count_x) % chunks_count_x;
+    int grad_y0 = ((y0 % chunks_count_y) + chunks_count_y) % chunks_count_y;
+    int grad_x1 = ((x1 % chunks_count_x) + chunks_count_x) % chunks_count_x;
+    int grad_y1 = ((y1 % chunks_count_y) + chunks_count_y) % chunks_count_y;
 
     // tl (top-left)
     const Vector2D& g00 = gradients[grad_y0 * chunks_count_x + grad_x0];  
