@@ -1,0 +1,24 @@
+[Title]
+Introduzione
+
+[Text]
+NoisyCuda propone di fornire una libreria ad alte prestazioni 
+per la generazione di Perlin Noise, sfruttando l'elaborazione parallela
+offerta dalle GPU tramite CUDA e ottimizzazioni a livello di CPU tramite
+istruzioni SIMD.
+L'obiettivo principale è accelerare significativamente
+la produzione di mappe di rumore utilizzate in grafica procedurale,
+simulazioni fisiche e applicazioni di rendering, mantenendo 
+alta la qualità visiva e la coerenza del rumore.
+
+La metodologia prevede la parallelizzazione delle operazioni
+in CUDA, mentre le istruzioni SIMD vengono impiegate per ottimizzare
+i calcoli vettoriali e ridurre i colli di bottiglia della CPU.
+
+Il progetto include benchmark comparativi tra implementazioni tradizionali 
+su CPU e la versione accelerata su GPU, evidenziando guadagni in termini 
+di throughput e scalabilità.
+
+L'implementazione risultante fornirà uno strumento efficiente e modulare, 
+facilmente integrabile in pipeline grafiche real-time e software di simulazione.
+
