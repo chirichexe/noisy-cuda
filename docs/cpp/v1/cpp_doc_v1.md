@@ -1,25 +1,23 @@
-# 🚀 [APPLICATION NAME] - Version [X.Y.Z] Documentation
-
-## 📅 Release Date
-
-**[YYYY-MM-DD]**
+# noisy_cuda - CPP Implementation - Version [1.0.0] Documentation
 
 ---
 
-## ✨ Overview
+## Overview
 
-This document provides a brief overview of version **[X.Y.Z]** of **[APPLICATION NAME]**. This application leverages **NVIDIA CUDA** technology to accelerate **[Briefly state the main function, e.g., large-scale data processing or deep learning model inference]**.
 
 ---
 
-## 💡 Key Features and Improvements
+## Key Features and Improvements
 
 This section highlights the main changes and new functionalities in this version.
 
-* **New Feature 1:** [Describe the new feature, e.g., Added support for multi-GPU scaling using the NCCL library.]
-* **Performance Improvement:** Achieved a **[Specific percentage or metric]** speedup for **[Specific benchmark/function]** due to **[Briefly state the optimization, e.g., improved memory coalescing or asynchronous execution]**.
-* **Bug Fix:** Resolved a critical bug where [Briefly describe the bug] in the CUDA kernel leading to incorrect results on specific hardware.
-* **Other:** [Any other notable changes, e.g., Updated the minimum required CUDA Toolkit version to 12.1.]
+* **Feature 1:** 
+
+---
+* **Improvement 1:**
+
+---
+* **Problem 1:**
 
 ---
 

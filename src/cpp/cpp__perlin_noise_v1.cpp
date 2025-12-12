@@ -83,7 +83,7 @@ struct Chunk {
                 float fx = ((float)(x + offset_x) / (float)lerp_coeff) * frequency;
                 float fy = ((float)(y + offset_y) / (float)lerp_coeff) * frequency;
 
-                // integer grid cell
+                // integer grid cell (floor handles negative values correctly)
                 int x0 = (int)std::floor(fx);
                 int y0 = (int)std::floor(fy);
                 int x1 = x0 + 1;
@@ -94,17 +94,16 @@ struct Chunk {
                 float sy = fy - (float)y0;
 
                 // corner gradients (shared from global grid)
-                /*
-                const Vector2D& g00 = gradients[x0 % chunks_count_x][y0 % chunks_count_y];  // tl
-                const Vector2D& g10 = gradients[x1 % chunks_count_x][y0 % chunks_count_y];  // tr
-                const Vector2D& g01 = gradients[x0 % chunks_count_x][y1 % chunks_count_y];  // bl
-                const Vector2D& g11 = gradients[x1 % chunks_count_x][y1 % chunks_count_y];  // br
-                */
+                // Use positive modulo for proper wrapping with negative indices
+                int gx0 = ((x0 % chunks_count_x) + chunks_count_x) % chunks_count_x;
+                int gy0 = ((y0 % chunks_count_y) + chunks_count_y) % chunks_count_y;
+                int gx1 = ((x1 % chunks_count_x) + chunks_count_x) % chunks_count_x;
+                int gy1 = ((y1 % chunks_count_y) + chunks_count_y) % chunks_count_y;
 
-                const Vector2D& g00 = gradients[x0 % chunks_count_x][y0 % chunks_count_y];  // tl
-                const Vector2D& g10 = gradients[x1 % chunks_count_x][y0 % chunks_count_y];  // tr
-                const Vector2D& g01 = gradients[x0 % chunks_count_x][y1 % chunks_count_y];  // bl
-                const Vector2D& g11 = gradients[x1 % chunks_count_x][y1 % chunks_count_y];  // br
+                const Vector2D& g00 = gradients[gx0][gy0];  // tl
+                const Vector2D& g10 = gradients[gx1][gy0];  // tr
+                const Vector2D& g01 = gradients[gx0][gy1];  // bl
+                const Vector2D& g11 = gradients[gx1][gy1];  // br
 
                 // distance vectors
                 Vector2D d00(sx,     sy);
@@ -128,7 +127,7 @@ struct Chunk {
                 float value = lerp(nx0, nx1, v);
 
                 // multiply by amplitude for THIS octave
-                buffer[y * image_width + x] += value * amplitude;  // ADDED: accumulate float noise
+                buffer[y * image_width + x] += value * amplitude;
             }
         }
     }
@@ -239,6 +238,8 @@ void generate_perlin_noise(const Options& opts) {
         printf("  chunks           = %dx%d (total %d)\n", chunks_count_x, chunks_count_y, chunks_count_x * chunks_count_y);
         printf("  mem (approx)     = %zu bytes (gradients %zu + accumulator %zu)\n",
                estimated_total_alloc, gradients_bytes, accumulator_bytes);
+        printf("\n");
+
     }
 
     /* convert accumulator to final 0-255 output */
@@ -256,9 +257,6 @@ void generate_perlin_noise(const Options& opts) {
     }
 
     /* save the generated noise image */
-    //stbi_write_png(output_filename.c_str(), width, height, channels, output.data(), width * channels);
-    //printf("\nOutput saved as \"%s\"\n", output_filename.c_str());
-
     if (!no_outputs){
         save_output(
             output,

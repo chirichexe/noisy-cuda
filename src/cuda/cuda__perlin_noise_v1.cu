@@ -261,6 +261,12 @@ void generate_perlin_noise(const Options& opts) {
     /* Calculate Kernel Time */
     float kernel_ms = 0.0f;
     CHECK(cudaEventElapsedTime(&kernel_ms, start_kernel, stop_kernel));
+    
+    /* Calculate profiling metrics */
+    int total_threads = width * height;
+    float time_per_pixel = kernel_ms / total_threads;
+    int chunks_total = chunks_count_x * chunks_count_y;
+    size_t total_memory = buffer_size + gradients_buffer_size;
    
     /* copy and free the result from the device to the output pointer */
     CHECK(cudaMemcpy(accumulator.data(), d_accumulator, buffer_size, cudaMemcpyDeviceToHost));
@@ -291,8 +297,19 @@ void generate_perlin_noise(const Options& opts) {
 
     if (verbose) {
         printf("\nProfiling:\n");
-        printf("  kernel Time       = %.3f ms\n", kernel_ms);
-        printf("  total Time        = %.3f s\n", total_s.count());
+        printf("  kernel time       = %.3f ms\n", kernel_ms);
+        printf("  total time        = %.3f s\n", total_s.count());
+        printf("  time / pixel      = %.6f ms\n", time_per_pixel);
+        printf("  grid blocks       = %dx%d (total %d)\n", 
+            (width + block.x - 1) / block.x, 
+            (height + block.y - 1) / block.y,
+            ((width + block.x - 1) / block.x) * ((height + block.y - 1) / block.y));
+        printf("  block size        = %dx%d (threads: %d)\n", block.x, block.y, block.x * block.y);
+        printf("  chunks            = %dx%d (total %d)\n", chunks_count_x, chunks_count_y, chunks_total);
+        printf("  mem (approx)      = %zu bytes (gradients %zu + accumulator %zu)\n", 
+            total_memory, gradients_buffer_size, buffer_size);
+        printf("  device            = %s\n", deviceProp.name);
+        printf("\n");
     }
 
     if (!no_outputs){

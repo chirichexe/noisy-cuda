@@ -34,7 +34,7 @@ int main(int argc, char** argv) {
 
         generate_perlin_noise(opts);
         
-        std::cout << "Done!" << std::endl;
+        std::cout << "Noise generation completed successfully." << std::endl;
         
     } 
     catch (const std::exception& e) {
