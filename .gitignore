@@ -6,9 +6,9 @@ noisy_cuda
 build*
 
 # outputs
-#*.png
+*.png
 *.ppm
-#*.csv
+*.csv
 *.raw
 tests/outputs/*
 
