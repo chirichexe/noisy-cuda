@@ -28,9 +28,12 @@ endif()
 
 add_library(perlin_cpp STATIC ${CPP_SRC})
 
+target_compile_options(perlin_cpp PRIVATE -O3)
+
 target_include_directories(perlin_cpp PRIVATE ${CMAKE_SOURCE_DIR}/include)
 
 target_compile_definitions(perlin_cpp PRIVATE
     BACKEND_NAME="cpp"
     BACKEND_VERSION="${CPP_VERSION}"
 )
+
