@@ -308,7 +308,7 @@ void generate_perlin_noise(const Options& opts) {
         size_t accumulator_bytes = accumulator.size() * sizeof(float);
         size_t estimated_total_alloc = gradients_bytes + accumulator_bytes;
 
-        printf("\nProfiling:\n");
+        printf("Profiling:\n");
         printf("  wall time        = %.3f ms\n", wall_ms);
         printf("  cpu time         = %.6f s (clock ticks = %.0f)\n", cpu_seconds, cpu_ticks);
         printf("  time / pixel     = %.6f ms\n", ms_per_pixel);

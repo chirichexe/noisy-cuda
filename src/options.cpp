@@ -207,7 +207,10 @@ void print_program_options(Options opts) {
         fprintf(stderr, "Configuration:\n");
         fprintf(stderr, "  Size:        %d x %d\n", opts.width, opts.height);
         fprintf(stderr, "  Format:      %s\n", opts.format.c_str());
-        fprintf(stderr, "  Output file: %s\n", opts.output_filename.c_str());
+        fprintf(stderr, "  No output:   %s\n", opts.no_outputs ? "enabled" : "disabled");
+        if (!opts.no_outputs)
+            fprintf(stderr, "  Output file: %s\n", opts.output_filename.c_str());
+        fprintf(stderr, "  Offset:      (%d, %d)\n", opts.offset_x, opts.offset_y);
 
         if (opts.seed_provided) {
             std::cerr << "  Seed:        " << opts.seed << " (provided)\n";
@@ -215,15 +218,15 @@ void print_program_options(Options opts) {
             std::cerr << "  Seed:        " << opts.seed << " (auto-generated)\n";
         }
         fprintf(stderr, "  Verbose:     enabled\n");
+        printf("\n");
 
         /* perlin parameters */
             std::cout << "Generating Perlin noise with options:\n"
-            << "  size:" << opts.width << "x" << opts.height << "\n"
             << "  freq=" << opts.frequency << "\n"
             << "  amp=" << opts.amplitude << "\n"
             << "  octaves=" << opts.octaves << "\n"
             << "  lacunarity=" << opts.lacunarity << "\n"
             << "  persistence=" << opts.persistence << "\n"
-            << "  offset=(" << opts.offset_x << "," << opts.offset_y << ")\n";
+            << "\n";
     }
 }
