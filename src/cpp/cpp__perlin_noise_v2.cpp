@@ -122,13 +122,21 @@
 
 */
 
+/*
+
+Tabella di Permutazione (PERMUTATION): Questo è un array di 256 numeri interi (da 0 a 255) che viene inizializzato una sola volta. La funzione init_permutation_table prende un seed (seme) e lo usa per mescolare l'ordine dei numeri nell'array tramite l'algoritmo Fisher-Yates. Questo rende la sequenza di numeri pseudo-casuale ma perfettamente ripetibile per lo stesso seed, garantendo che il rumore generato sia deterministico.
+
+Tabella dei Gradienti (GRADIENTS): Questa è una lista fissa e immutabile di 16 vettori 2D predefiniti. Questi vettori definiscono le 16 possibili direzioni e intensità di pendenza che possono essere assegnate a un punto della griglia.
+
+Selezione del Gradiente (get_gradient): Questa è la funzione di lookup rapida. Prende le coordinate intere della griglia (x,y) e le usa come indici per fare un doppio accesso a cascata nella tabella PERMUTATION. Il risultato di questo doppio lookup è un indice pseudo-casuale (tra 0 e 255). Questo indice viene poi mascherato (& 15) per selezionare in modo deterministico uno dei 16 vettori dalla tabella GRADIENTS.
+*/
+
 /* chunk variables */
 #define CHUNK_SIDE_LENGTH 32
 #define PERMUTATION_TABLE_SIZE 256
 
 /**
  * @brief Permutation table for deterministic pseudo-random gradient selection
- * Inizializzata una sola volta in base al seed
  */
 static int PERMUTATION[PERMUTATION_TABLE_SIZE];
 static bool PERMUTATION_INITIALIZED = false;
@@ -137,7 +145,7 @@ static bool PERMUTATION_INITIALIZED = false;
  * @brief Initialize permutation table from seed
  */
 void init_permutation_table(std::uint64_t seed) {
-    if (PERMUTATION_INITIALIZED) return;  // genera una sola volta
+    if (PERMUTATION_INITIALIZED) return;
     
     // Inizializza con identità [0, 1, 2, ..., 255]
     for (int i = 0; i < PERMUTATION_TABLE_SIZE; i++) {
