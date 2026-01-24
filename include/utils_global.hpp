@@ -44,7 +44,7 @@
  * @param format_str 
  */
 void save_output(
-    const std::vector<unsigned char>& output_data,
+    const std::vector<uint8_t>& output_data,
     int width,
     int height,
     unsigned int channels,
@@ -53,7 +53,7 @@ void save_output(
 ) {
     std::string format = format_str;
     std::transform(format.begin(), format.end(), format.begin(), 
-                   [](unsigned char c){ return std::tolower(c); });
+                   [](uint8_t c){ return std::tolower(c); });
 
     std::string extension;
     if (format == "png") {

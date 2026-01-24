@@ -28,7 +28,7 @@ endif()
 
 add_library(perlin_cpp STATIC ${CPP_SRC})
 
-target_compile_options(perlin_cpp PRIVATE -O3)
+target_compile_options(perlin_cpp PRIVATE -O0)
 
 target_include_directories(perlin_cpp PRIVATE ${CMAKE_SOURCE_DIR}/include)
 

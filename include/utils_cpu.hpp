@@ -31,6 +31,7 @@ struct Vector2D {
     float y = 0.0f;
 
     Vector2D() = default;
+
     Vector2D(float x_, float y_) : x(x_), y(y_) {}
 
     Vector2D operator-(const Vector2D& other) const {

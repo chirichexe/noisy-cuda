@@ -28,6 +28,11 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/cuda__perlin_noise_${CUDA_VERSION}.cu
 endif()
 
 add_library(perlin_cuda STATIC ${CUDA_SRC})
+
+set_target_compile_options(perlin_cuda PRIVATE
+    $<$<COMPILE_LANGUAGE:CUDA>:-O0>
+)
+
 set_target_properties(perlin_cuda PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
 target_include_directories(perlin_cuda PRIVATE ${CMAKE_SOURCE_DIR}/include)
