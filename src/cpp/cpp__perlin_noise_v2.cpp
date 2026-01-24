@@ -36,30 +36,6 @@
 /* chunk variables */
 #define CHUNK_SIDE_LENGTH 32
 
-/* fade lookup table */
-#define LUT_SIZE 1024
-static float fade_lut[LUT_SIZE];
-
-/**
- * @brief Inizializza la LUT con i valori precalcolati del polinomio di Ken Perlin
- */
-void init_fade_lut() {
-    for (int i = 0; i < LUT_SIZE; i++) {
-        float t = (float)i / (float)(LUT_SIZE - 1);
-        // Polinomio: 6t^5 - 15t^4 + 10t^3
-        fade_lut[i] = t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
-    }
-}
-
-/**
- * @brief Recupera il valore fade dalla LUT in tempo costante
- */
-inline float fade_fast(float t) {
-    // Mapping del valore [0, 1] nell'indice [0, LUT_SIZE-1]
-    int index = static_cast<int>(t * (LUT_SIZE - 1));
-    return fade_lut[index];
-}
-
 /**
  * @brief Chunk: represents a square section of the noise map
  */
@@ -70,16 +46,12 @@ struct Chunk {
     Chunk(int cx, int cy) : chunk_x(cx), chunk_y(cy) {}
 
     void generate_chunk_pixels(
-        std::vector<float>& accumulator, // reference to global float accumulator
-        int width,
-        int height,
-        const std::vector<std::vector<Vector2D>>& gradients,
-        int chunks_count_x,
-        int chunks_count_y,
-        float frequency,
-        float amplitude,
-        int offset_x,
-        int offset_y
+        std::vector<float>& accumulator,
+        int width, int height,
+        const std::vector<int>& p,         // Nuova lookup table
+        const std::vector<Vector2D>& g,    // Nuovi gradienti fissi
+        float frequency, float amplitude,
+        int offset_x, int offset_y
     ) const {
 
         // chunk's pixels ranges to iterate over
@@ -109,16 +81,20 @@ struct Chunk {
                 float local_x = noise_x - (float)cell_left;
                 float local_y = noise_y - (float)cell_top;
 
-                // Fetch gradients for this pixel
-                int grad_idx_l = ((cell_left  % chunks_count_x) + chunks_count_x) % chunks_count_x;
-                int grad_idx_t = ((cell_top   % chunks_count_y) + chunks_count_y) % chunks_count_y;
-                int grad_idx_r = ((cell_right % chunks_count_x) + chunks_count_x) % chunks_count_x;
-                int grad_idx_b = ((cell_bottom % chunks_count_y) + chunks_count_y) % chunks_count_y;
+                int xi = cell_left & 255;
+                int yi = cell_top  & 255;
 
-                const Vector2D& grad_top_left     = gradients[grad_idx_l][grad_idx_t];
-                const Vector2D& grad_top_right    = gradients[grad_idx_r][grad_idx_t];
-                const Vector2D& grad_bottom_left  = gradients[grad_idx_l][grad_idx_b];
-                const Vector2D& grad_bottom_right = gradients[grad_idx_r][grad_idx_b];
+                // Otteniamo gli indici per i 4 angoli dalla tabella di permutazione
+                int gi_tl = p[p[xi] + yi] % g.size();           // Top-Left
+                int gi_tr = p[p[xi + 1] + yi] % g.size();       // Top-Right
+                int gi_bl = p[p[xi] + yi + 1] % g.size();       // Bottom-Left
+                int gi_br = p[p[xi + 1] + yi + 1] % g.size();   // Bottom-Right
+
+                // Selezioniamo i vettori gradiente
+                const Vector2D& grad_top_left     = g[gi_tl];
+                const Vector2D& grad_top_right    = g[gi_tr];
+                const Vector2D& grad_bottom_left  = g[gi_bl];
+                const Vector2D& grad_bottom_right = g[gi_br];
 
                 // Calculate distance vectors between each gradient and pixel coords
                 Vector2D dist_to_top_left     (local_x,        local_y);
@@ -133,11 +109,11 @@ struct Chunk {
                 float influence_bottom_right = grad_bottom_right.dot(dist_to_bottom_right);
 
                 // Interpolate the corners with the influence (in pairs)
-                float lerp_top    = lerp(influence_top_left, influence_top_right, fade_fast(local_x));
-                float lerp_bottom = lerp(influence_bottom_left, influence_bottom_right, fade_fast(local_x));
+                float lerp_top    = lerp(influence_top_left, influence_top_right, fade(local_x));
+                float lerp_bottom = lerp(influence_bottom_left, influence_bottom_right, fade(local_x));
                 
                 // Get the final pixel value lerping top and bottom
-                float pixel_noise_value = lerp(lerp_top, lerp_bottom, fade_fast(local_y));
+                float pixel_noise_value = lerp(lerp_top, lerp_bottom, fade(local_y));
 
                 // add the value to the global accumulator
                 accumulator[y * width + x] += pixel_noise_value * amplitude;
@@ -171,8 +147,23 @@ void generate_perlin_noise(const Options& opts) {
     /* randomize from seed */
     srand(seed);
 
-    // aDSBGIJEFGJKVWÒGHJKLDFSVWbjk
-    init_fade_lut();
+    // 1. Crea la Permutation Table basata sul seed
+    std::vector<int> p(512);
+    for (int i = 0; i < 256; i++) p[i] = i;
+
+    // Mischia usando Fisher-Yates
+    for (int i = 255; i > 0; i--) {
+        int j = rand() % (i + 1);
+        std::swap(p[i], p[j]);
+    }
+    // Raddoppia per evitare overflow durante l'indicizzazione
+    for (int i = 0; i < 256; i++) p[256 + i] = p[i];
+
+    // 2. Definisci i gradienti costanti (8 o 12 direzioni standard)
+    // Questo sostituisce la vecchia matrice 'gradients' casuale
+    static const std::vector<Vector2D> g = {
+        {1,1}, {-1,1}, {1,-1}, {-1,-1}, {1,0}, {-1,0}, {0,1}, {0,-1}
+    };
 
     /* start profiling timers */
     std::chrono::high_resolution_clock::time_point wall_start;
@@ -212,16 +203,9 @@ void generate_perlin_noise(const Options& opts) {
                 Chunk chunk(cx, cy);
                 
                 chunk.generate_chunk_pixels(
-                    accumulator,
-                    width,
-                    height,
-                    gradients,
-                    chunks_count_x,
-                    chunks_count_y,
-                    frequency,
-                    amplitude,
-                    offset_x,
-                    offset_y
+                    accumulator, width, height,
+                    p, g, // <--- Passa p e g invece di gradients
+                    frequency, amplitude, offset_x, offset_y
                 );
             }
         }
@@ -248,7 +232,7 @@ void generate_perlin_noise(const Options& opts) {
         size_t accumulator_bytes = accumulator.size() * sizeof(float);
         size_t estimated_total_alloc = gradients_bytes + accumulator_bytes;
 
-        std::string csv_name = "cpp_v2_benchmark.csv";
+        std::string csv_name = "cpp_v_benchmark.csv";
         std::ifstream check_file(csv_name);
         bool exists = check_file.good();
         check_file.close();
@@ -282,11 +266,11 @@ void generate_perlin_noise(const Options& opts) {
     if (!no_outputs){
 
         // create the output array
-        std::vector<unsigned char> output(width * height, 0);
+        std::vector<uint8_t> output(width * height, 0);
         for (int i = 0; i < width * height; i++) {
             // mapping the accumulator (-1, 1) to grayscaled pixels (0-255)
             float v = std::clamp( accumulator[i] , -1.0f, 1.0f);
-            output[i] = static_cast<unsigned char>((v + 1.0f) * 0.5f * 255.0f);
+            output[i] = static_cast<uint8_t>((v + 1.0f) * 0.5f * 255.0f);
         }
 
         save_output(

@@ -63,15 +63,15 @@ struct Chunk {
         int start_y = chunk_y * CHUNK_SIDE_LENGTH;
         int end_x = std::min(start_x + CHUNK_SIDE_LENGTH, width);
         int end_y = std::min(start_y + CHUNK_SIDE_LENGTH, height);
+        // Get the pixel global coordinates with:
+        // - offset
+        // - frequency scaling (aspect ratio to 1:1)
+        float max_dimension = std::max(width, height);
 
         /* iterate over chunk's pixels */
         for (int y = start_y; y < end_y; y++) {
             for (int x = start_x; x < end_x; x++) {
 
-                // Get the pixel global coordinates with:
-                // - offset
-                // - frequency scaling (aspect ratio to 1:1)
-                float max_dimension = std::max(width, height);
                 float noise_x = ((float)(x + offset_x) / max_dimension) * frequency;
                 float noise_y = ((float)(y + offset_y) / max_dimension) * frequency;
 
