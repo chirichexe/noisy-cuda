@@ -36,6 +36,10 @@
 /* chunk variables */
 #define CHUNK_SIDE_LENGTH 32
 
+static const Vector2D g[] = {
+    {1,1}, {-1,1}, {1,-1}, {-1,-1}, {1,0}, {-1,0}, {0,1}, {0,-1}
+};
+
 /**
  * @brief Chunk: represents a square section of the noise map
  */
@@ -49,7 +53,7 @@ struct Chunk {
         std::vector<float>& accumulator,
         int width, int height,
         const std::vector<int>& p,         // Nuova lookup table
-        const std::vector<Vector2D>& g,    // Nuovi gradienti fissi
+        //const std::vector<Vector2D>& g,    // Nuovi gradienti fissi
         float frequency, float amplitude,
         int offset_x, int offset_y
     ) const {
@@ -85,10 +89,10 @@ struct Chunk {
                 int yi = cell_top  & 255;
 
                 // Otteniamo gli indici per i 4 angoli dalla tabella di permutazione
-                int gi_tl = p[p[xi] + yi] % g.size();           // Top-Left
-                int gi_tr = p[p[xi + 1] + yi] % g.size();       // Top-Right
-                int gi_bl = p[p[xi] + yi + 1] % g.size();       // Bottom-Left
-                int gi_br = p[p[xi + 1] + yi + 1] % g.size();   // Bottom-Right
+                int gi_tl = p[p[xi] + yi] & 7;           
+                int gi_tr = p[p[xi + 1] + yi] & 7;       
+                int gi_bl = p[p[xi] + yi + 1] & 7;       
+                int gi_br = p[p[xi + 1] + yi + 1] & 7;
 
                 // Selezioniamo i vettori gradiente
                 const Vector2D& grad_top_left     = g[gi_tl];
@@ -161,9 +165,7 @@ void generate_perlin_noise(const Options& opts) {
 
     // 2. Definisci i gradienti costanti (8 o 12 direzioni standard)
     // Questo sostituisce la vecchia matrice 'gradients' casuale
-    static const std::vector<Vector2D> g = {
-        {1,1}, {-1,1}, {1,-1}, {-1,-1}, {1,0}, {-1,0}, {0,1}, {0,-1}
-    };
+
 
     /* start profiling timers */
     std::chrono::high_resolution_clock::time_point wall_start;
@@ -176,17 +178,6 @@ void generate_perlin_noise(const Options& opts) {
     /* calculate chunk grid with ceiling division */
     int chunks_count_x = (width + CHUNK_SIDE_LENGTH - 1) / CHUNK_SIDE_LENGTH;
     int chunks_count_y = (height + CHUNK_SIDE_LENGTH - 1) / CHUNK_SIDE_LENGTH;
-
-    /* initialize gradient vectors as a grid */
-    std::vector<std::vector<Vector2D>> gradients(chunks_count_x, std::vector<Vector2D>(chunks_count_y));
-
-    for (int gx = 0; gx < chunks_count_x; gx++) {
-        for (int gy = 0; gy < chunks_count_y; gy++) {
-            float rx = (float)rand() / RAND_MAX * 2.0f - 1.0f; // random x in [-1,1]
-            float ry = (float)rand() / RAND_MAX * 2.0f - 1.0f; // random y in [-1,1]
-            gradients[gx][gy] = Vector2D(rx, ry).normalize();
-        }
-    }
 
     /* octave loop */
     float frequency = base_frequency;
@@ -204,7 +195,7 @@ void generate_perlin_noise(const Options& opts) {
                 
                 chunk.generate_chunk_pixels(
                     accumulator, width, height,
-                    p, g, // <--- Passa p e g invece di gradients
+                    p, //g, // <--- Passa p e g invece di gradients
                     frequency, amplitude, offset_x, offset_y
                 );
             }
@@ -228,11 +219,10 @@ void generate_perlin_noise(const Options& opts) {
         size_t num_pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
         double ms_per_pixel = (num_pixels > 0) ? (wall_ms / (double)num_pixels) : 0.0;
 
-        size_t gradients_bytes = (size_t)chunks_count_x * (size_t)chunks_count_y * sizeof(Vector2D);
         size_t accumulator_bytes = accumulator.size() * sizeof(float);
-        size_t estimated_total_alloc = gradients_bytes + accumulator_bytes;
+        size_t estimated_total_alloc = accumulator_bytes + p.size(); //g.size();
 
-        std::string csv_name = "cpp_v_benchmark.csv";
+        std::string csv_name = "cpp_v2_benchmark.csv";
         std::ifstream check_file(csv_name);
         bool exists = check_file.good();
         check_file.close();
