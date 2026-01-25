@@ -1,5 +1,5 @@
 /*
- * cpp__perlin_noise_v1.cpp - perlin noise: C++ implementation
+ * cuda__perlin_noise_v1.cu - perlin noise: CUDA implementation
  *
  */
 
@@ -32,17 +32,21 @@
 #include <iostream>
 #include <fstream>
 
+
 /* chunk variables */
 #define CHUNK_SIDE_LENGTH 32
+
 
 /**
  * @brief Smoothing function for Perlin noise
  * @param t 
- * @return float 
+ * @return float z
  */
 static float fade(float t) {
     return t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
 }
+
+
 
 /** 
  * @brief Linear interpolation
@@ -87,6 +91,15 @@ struct Vector2D {
     }
 };
 
+
+
+// Declaring the global gradients' vectors
+static const Vector2D gradients[] = {
+    {1,1}, {-1,1}, {1,-1}, {-1,-1}, {1,0}, {-1,0}, {0,1}, {0,-1}
+};
+
+
+
 /**
  * @brief Chunk: represents a square section of the noise map
  */
@@ -97,12 +110,10 @@ struct Chunk {
     Chunk(int cx, int cy) : chunk_x(cx), chunk_y(cy) {}
 
     void generate_chunk_pixels(
-        std::vector<float>& accumulator, // reference to global float accumulator
+        std::vector<float>& accumulator,
         int width,
         int height,
-        const std::vector<std::vector<Vector2D>>& gradients,
-        int chunks_count_x,
-        int chunks_count_y,
+        const std::vector<int>& lookUpTable,
         float frequency,
         float amplitude,
         int offset_x,
@@ -114,20 +125,20 @@ struct Chunk {
         int start_y = chunk_y * CHUNK_SIDE_LENGTH;
         int end_x = std::min(start_x + CHUNK_SIDE_LENGTH, width);
         int end_y = std::min(start_y + CHUNK_SIDE_LENGTH, height);
-        
-        // Get the pixel global coordinates with:
-        // - offset
-        // - frequency scaling (aspect ratio to 1:1)
-        float max_dimension = std::max(width, height);
 
         /* iterate over chunk's pixels */
         for (int y = start_y; y < end_y; y++) {
             for (int x = start_x; x < end_x; x++) {
 
+                // Get the pixel global coordinates with:
+                // - offset
+                // - frequency scaling (aspect ratio to 1:1)
+                float max_dimension = std::max(width, height);
                 float noise_x = ((float)(x + offset_x) / max_dimension) * frequency;
                 float noise_y = ((float)(y + offset_y) / max_dimension) * frequency;
 
-                // Get the pixel (seen as cell) corners' coordinates
+                // Determine the integer coordinates of the cell
+                // (grid square) that contains this point
                 int cell_left = (int)std::floor(noise_x);
                 int cell_top = (int)std::floor(noise_y);
                 int cell_right = cell_left + 1;
@@ -137,37 +148,44 @@ struct Chunk {
                 float local_x = noise_x - (float)cell_left;
                 float local_y = noise_y - (float)cell_top;
 
-                // Fetch gradients for this pixel
-                int grad_idx_l = ((cell_left  % chunks_count_x) + chunks_count_x) % chunks_count_x;
-                int grad_idx_t = ((cell_top   % chunks_count_y) + chunks_count_y) % chunks_count_y;
-                int grad_idx_r = ((cell_right % chunks_count_x) + chunks_count_x) % chunks_count_x;
-                int grad_idx_b = ((cell_bottom % chunks_count_y) + chunks_count_y) % chunks_count_y;
+                // Wrap cell coordinates to [0, 255] for indexing the permutation table
+                // The & 255 operation is equivalent to modulo 256 but faster
+                int xi = cell_left & 255;
+                int yi = cell_top  & 255;
 
-                const Vector2D& grad_top_left     = gradients[grad_idx_l][grad_idx_t];
-                const Vector2D& grad_top_right    = gradients[grad_idx_r][grad_idx_t];
-                const Vector2D& grad_bottom_left  = gradients[grad_idx_l][grad_idx_b];
-                const Vector2D& grad_bottom_right = gradients[grad_idx_r][grad_idx_b];
+                // Use the permutation table to get pseudo-random gradient indices at the four corners of the cell
+                int grad_index_top_left     = lookUpTable[ lookUpTable[xi]     + yi] & 7;
+                int grad_index_top_right    = lookUpTable[ lookUpTable[xi + 1] + yi] & 7;
+                int grad_index_bottom_left  = lookUpTable[ lookUpTable[xi]     + yi + 1] & 7;
+                int grad_index_bottom_right = lookUpTable[ lookUpTable[xi + 1] + yi + 1] & 7;
 
-                // Calculate distance vectors between each gradient and pixel coords
+                // Select the gradient vectors corresponding to these indices
+                const Vector2D& grad_top_left     = gradients[grad_index_top_left];
+                const Vector2D& grad_top_right    = gradients[grad_index_top_right];
+                const Vector2D& grad_bottom_left  = gradients[grad_index_bottom_left];
+                const Vector2D& grad_bottom_right = gradients[grad_index_bottom_right];
+
+                // Compute vectors from each corner of the cell to the pixel's location
                 Vector2D dist_to_top_left     (local_x,        local_y);
                 Vector2D dist_to_top_right    (local_x - 1.0f, local_y);
                 Vector2D dist_to_bottom_left  (local_x,        local_y - 1.0f);
                 Vector2D dist_to_bottom_right (local_x - 1.0f, local_y - 1.0f);
 
-                // Calculate gradients influences with dot products
+                // Calculate the dot product between distance vectors and gradient vectors
+                // This gives the influence (contribution) of each corner on the final noise value
                 float influence_top_left     = grad_top_left.dot(dist_to_top_left);
                 float influence_top_right    = grad_top_right.dot(dist_to_top_right);
                 float influence_bottom_left  = grad_bottom_left.dot(dist_to_bottom_left);
                 float influence_bottom_right = grad_bottom_right.dot(dist_to_bottom_right);
 
-                // Interpolate the corners with the influence (in pairs)
-                float lerp_top    = lerp(influence_top_left, influence_top_right, fade(local_x));
-                float lerp_bottom = lerp(influence_bottom_left, influence_bottom_right, fade(local_x));
+                // Interpolate the influences along the x-axis using a fade function for smoothness
+                float interp_top    = lerp(influence_top_left, influence_top_right, fade(local_x));
+                float interp_bottom = lerp(influence_bottom_left, influence_bottom_right, fade(local_x));
                 
-                // Get the final pixel value lerping top and bottom
-                float pixel_noise_value = lerp(lerp_top, lerp_bottom, fade(local_y));
+                // Interpolate the top and bottom results along the y-axis to get the final Perlin noise value
+                float pixel_noise_value = lerp(interp_top, interp_bottom, fade(local_y));
 
-                // add the value to the global accumulator
+                // Accumulate the computed noise into the output array, scaling by the amplitude
                 accumulator[y * width + x] += pixel_noise_value * amplitude;
 
             }
@@ -199,8 +217,22 @@ void generate_perlin_noise(const Options& opts) {
     std::string output_filename = opts.output_filename;
     std::string output_format = opts.format;
 
+
     /* randomize from seed */
     srand(seed);
+
+    // build the permutation tables
+    std::vector<int> lookUpTable(512);
+    for (int i = 0; i < 256; i++) lookUpTable[i] = i;
+
+    // shuffling the table with Fisher-Yates approach
+    for (int i = 255; i > 0; i--) {
+        int j = rand() % (i + 1);
+        std::swap(lookUpTable[i], lookUpTable[j]);
+    }
+
+    // avoid overflows doubling the table
+    for (int i = 0; i < 256; i++) lookUpTable[256 + i] = lookUpTable[i];
 
     /* start profiling timers */
     std::chrono::high_resolution_clock::time_point wall_start;
@@ -213,17 +245,6 @@ void generate_perlin_noise(const Options& opts) {
     /* calculate chunk grid with ceiling division */
     int chunks_count_x = (width + CHUNK_SIDE_LENGTH - 1) / CHUNK_SIDE_LENGTH;
     int chunks_count_y = (height + CHUNK_SIDE_LENGTH - 1) / CHUNK_SIDE_LENGTH;
-
-    /* initialize gradient vectors as a grid */
-    std::vector<std::vector<Vector2D>> gradients(chunks_count_x, std::vector<Vector2D>(chunks_count_y));
-
-    for (int gx = 0; gx < chunks_count_x; gx++) {
-        for (int gy = 0; gy < chunks_count_y; gy++) {
-            float rx = (float)rand() / RAND_MAX * 2.0f - 1.0f; // random x in [-1,1]
-            float ry = (float)rand() / RAND_MAX * 2.0f - 1.0f; // random y in [-1,1]
-            gradients[gx][gy] = Vector2D(rx, ry).normalize();
-        }
-    }
 
     /* octave loop */
     float frequency = base_frequency;
@@ -243,9 +264,7 @@ void generate_perlin_noise(const Options& opts) {
                     accumulator,
                     width,
                     height,
-                    gradients,
-                    chunks_count_x,
-                    chunks_count_y,
+                    lookUpTable,
                     frequency,
                     amplitude,
                     offset_x,
@@ -254,11 +273,12 @@ void generate_perlin_noise(const Options& opts) {
             }
         }
 
-        // prepare next octave (standard FBM rules)
-        // https://medium.com/@logan.margo314/procedural-generation-using-fractional-brownian-motion-b35b7231309f
-        frequency *= lacunarity;   // controls frequency growth
-        amplitude *= persistence;  // controls amplitude decay
+        // controls frequency growth
+        frequency *= lacunarity;
+        // controls amplitude decay
+        amplitude *= persistence;
     }
+
 
     /* stop profiling timers and report */
     if (benchmark) {
@@ -294,11 +314,11 @@ void generate_perlin_noise(const Options& opts) {
     if (!no_outputs){
 
         // create the output array
-        std::vector<unsigned char> output(width * height, 0);
+        std::vector<uint8_t> output(width * height, 0);
         for (int i = 0; i < width * height; i++) {
             // mapping the accumulator (-1, 1) to grayscaled pixels (0-255)
             float v = std::clamp( accumulator[i] , -1.0f, 1.0f);
-            output[i] = static_cast<unsigned char>((v + 1.0f) * 0.5f * 255.0f);
+            output[i] = static_cast<uint8_t>((v + 1.0f) * 0.5f * 255.0f);
         }
 
         save_output(

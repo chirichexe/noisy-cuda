@@ -47,6 +47,7 @@ Options parse_options(int argc, char** argv) {
         "  -s, --size <WxH>          Output size in pixels (width x height). Default: 2048x2048\n"
         "  -v, --verbose             Print processing steps and timings\n"
         "  -n, --no-output           Disable output file generation\n"
+        "  -b, --benchmark           Generate CSV benchmark data\n"
         "\n"
         "  Perlin noise generation options:\n\n"
         "  -F, --frequency <float>   Base frequency (scale factor). Default: 1.0\n"
@@ -166,6 +167,11 @@ Options parse_options(int argc, char** argv) {
             if (i + 1 >= argc) throw std::invalid_argument("Missing value for --octaves");
             opts.octaves = std::stoi(argv[++i]);
             if (opts.octaves < 1) throw std::invalid_argument("Octaves must be >= 1");
+        }
+
+        // Benchmark option (help order: -b)
+        else if (arg == "-b" || arg == "--benchmark") {
+            opts.benchmark = true;
         }
 
         // Unknown option

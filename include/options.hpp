@@ -62,6 +62,7 @@ struct Options {
     std::uint64_t seed = 0;
     bool seed_provided = false;
     bool no_outputs = false;
+    bool benchmark = false;
 };
 
 /**

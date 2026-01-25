@@ -21,17 +21,18 @@
 
 #pragma once
 
-#include "utils_global.hpp" 
-
+#include <cstdint>  
 #include <cstdio>
 #include <iostream>
 #include <fstream>
 #include <algorithm>
 #include <vector>
 #include <string>
+#include <cctype>
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+
 
 /**
  * @brief save_output: saves the output data to a file in the specified format

@@ -63,6 +63,7 @@ cmake --build build_cpp
 | `-O` | `--offset` | `<x,y>` | `0,0` | Offset applied to noise coordinates. |
 | `-C` | `--octaves` | `<int>` | `1` | Number of octaves (>= 1). |
 | *positional* | *(seed)* | `<uint64>` | — | Positional unsigned integer seed (e.g. `./perlin 13813`). |
+| `-b` | `--benchmark` | none | `false` | Generate CSV benchmark data. |
 
 Usage: `./perlin [seed] [OPTIONS]`
 
@@ -72,7 +73,27 @@ Usage: `./perlin [seed] [OPTIONS]`
 - `RAW`: Raw binary data
 - `CSV`: Comma-separated values
 
-## Start profiling session
+## Benchmarking 
+
+If the `--benchmark` flag is set, the program will output benchmark data in CSV format to standard output, that includes:
+
+```
+timestamp,width,height,pixels,octaves,frequency,wall_ms,cpu_s,ms_per_pixel,mem_bytes
+```
+
+## Let's test it!
+
+To run the C++ benchmark test in v1 and v2, use the following command:
+ 
+### Test 1: C++ v1 vs. v2
+
+```sh
+./tests/benchmarks/cpp_benchmark.sh
+```
+
+> **Note**: Ensure you have built the C++ backend before running the benchmark test. If you have compiled the project in a different build directory, adjust the script accordingly.
+
+### Start CUDA Nsight Compute profiling
 
 ```sh
 ncu -o cuda --target-processes all ./build/cuda/noisy_cuda

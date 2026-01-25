@@ -1,5 +1,5 @@
 /*
- * cpp__perlin_noise.cpp - perlin noise: C++ implementation
+ * cpp__perlin_noise_v2.cpp - perlin noise: C++ implementation
  *
  */
 
@@ -211,6 +211,7 @@ void generate_perlin_noise(const Options& opts) {
     int offset_y = opts.offset_y;
     bool no_outputs = opts.no_outputs;
     bool verbose = opts.verbose;
+    bool benchmark = opts.benchmark;
 
     // output info
     std::string output_filename = opts.output_filename;
@@ -236,7 +237,7 @@ void generate_perlin_noise(const Options& opts) {
     /* start profiling timers */
     std::chrono::high_resolution_clock::time_point wall_start;
     clock_t cpu_start = 0;
-    if (verbose) {
+    if (benchmark) {
         wall_start = std::chrono::high_resolution_clock::now();
         cpu_start = std::clock();
     }
@@ -280,7 +281,7 @@ void generate_perlin_noise(const Options& opts) {
 
 
     /* stop profiling timers and report */
-    if (verbose) {
+    if (benchmark) {
         clock_t cpu_end = std::clock();
         auto wall_end = std::chrono::high_resolution_clock::now();
 
@@ -291,37 +292,22 @@ void generate_perlin_noise(const Options& opts) {
         size_t num_pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
         double ms_per_pixel = (num_pixels > 0) ? (wall_ms / (double)num_pixels) : 0.0;
 
+        size_t gradients_bytes = (size_t)chunks_count_x * (size_t)chunks_count_y * sizeof(Vector2D);
         size_t accumulator_bytes = accumulator.size() * sizeof(float);
-        size_t estimated_total_alloc = accumulator_bytes + lookUpTable.size();
+        size_t estimated_total_alloc = gradients_bytes + accumulator_bytes;
 
-        std::string csv_name = "cpp_v2_benchmark.csv";
-        std::ifstream check_file(csv_name);
-        bool exists = check_file.good();
-        check_file.close();
-
-        std::ofstream csv_file(csv_name, std::ios::app);
-        if (csv_file.is_open()) {
-            if (!exists) {
-                csv_file << "timestamp,width,height,pixels,octaves,frequency,wall_ms,cpu_s,ms_per_pixel,mem_bytes\n";
-            }
-            std::time_t now = std::time(nullptr);
-            csv_file << now << ","
-                     << width << ","
-                     << height << ","
-                     << num_pixels << ","
-                     << octaves << ","
-                     << base_frequency << ","
-                     << wall_ms << ","
-                     << cpu_seconds << ","
-                     << ms_per_pixel << ","
-                     << estimated_total_alloc << "\n";
-            
-            csv_file.close();
-        }
-
-        // Report testuale (opzionale, mantenuto per comodità)
-        printf("Profiling & Logging to %s complete.\n", csv_name.c_str());
-        printf("  wall time: %.3f ms | ms/pixel: %.6f\n\n", wall_ms, ms_per_pixel);
+        std::time_t now = std::time(nullptr);
+        //std::cout << "timestamp,width,height,pixels,octaves,frequency,wall_ms,cpu_s,ms_per_pixel,mem_bytes\n";
+        std::cout << now << ","
+                  << width << ","
+                  << height << ","
+                  << num_pixels << ","
+                  << octaves << ","
+                  << base_frequency << ","
+                  << wall_ms << ","
+                  << cpu_seconds << ","
+                  << ms_per_pixel << ","
+                  << estimated_total_alloc << std::endl;
     }
 
     /* save the generated noise image */

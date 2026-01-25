@@ -24,35 +24,21 @@ def main():
     df2 = load_and_clean(file2)
 
     # Setup figura
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(11, 10))
-    plt.subplots_adjust(hspace=0.4)
+    fig, ax = plt.subplots(figsize=(11, 6))
 
-    # Label basate sui nomi dei file (senza estensione)
+    # Label basate sui nomi dei file
     label1 = os.path.basename(file1).replace('.csv', '')
     label2 = os.path.basename(file2).replace('.csv', '')
 
-    # --- 1. Grafico CPU Time (Confronto) ---
-    ax1.plot(df1['width'], df1['cpu_s'], marker='o', linestyle='--', color='#95a5a6', label=f'{label1} (Original)')
-    ax1.plot(df2['width'], df2['cpu_s'], marker='o', linestyle='-',  color='#e67e22', label=f'{label2} (Optimized)')
+    # Grafico CPU Time (Confronto)
+    ax.plot(df1['width'], df1['cpu_s'], marker='o', linestyle='--', color='#95a5a6', linewidth=2, label=f'{label1} (Original)')
+    ax.plot(df2['width'], df2['cpu_s'], marker='o', linestyle='-', color='#e67e22', linewidth=2, label=f'{label2} (Optimized)')
     
-    ax1.set_title('Performance CPU: V1 vs V2', fontsize=14, fontweight='bold')
-    ax1.set_xlabel('Larghezza Immagine (px)')
-    ax1.set_ylabel('Tempo CPU (secondi)')
-    ax1.grid(True, linestyle=':', alpha=0.6)
-    ax1.legend()
-
-    # --- 2. Grafico Memoria (Confronto) ---
-    df1['mem_mb'] = df1['mem_bytes'] / (1024 * 1024)
-    df2['mem_mb'] = df2['mem_bytes'] / (1024 * 1024)
-    
-    ax2.plot(df1['width'], df1['mem_mb'], marker='s', linestyle='--', color='#7f8c8d', label=f'{label1}')
-    ax2.plot(df2['width'], df2['mem_mb'], marker='s', linestyle='-',  color='#2980b9', label=f'{label2}')
-    
-    ax2.set_title('Utilizzo Memoria: V1 vs V2', fontsize=14, fontweight='bold')
-    ax2.set_xlabel('Larghezza Immagine (px)')
-    ax2.set_ylabel('Memoria (MB)')
-    ax2.grid(True, linestyle=':', alpha=0.6)
-    ax2.legend()
+    ax.set_title('Performance CPU: V1 vs V2', fontsize=14, fontweight='bold')
+    ax.set_xlabel('Larghezza Immagine (px)')
+    ax.set_ylabel('Tempo CPU (secondi)')
+    ax.grid(True, linestyle=':', alpha=0.6)
+    ax.legend()
 
     # Salvataggio
     output_png = f"comparison_{label1}_vs_{label2}.png"

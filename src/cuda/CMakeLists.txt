@@ -29,7 +29,7 @@ endif()
 
 add_library(perlin_cuda STATIC ${CUDA_SRC})
 
-set_target_compile_options(perlin_cuda PRIVATE
+target_compile_options(perlin_cuda PRIVATE
     $<$<COMPILE_LANGUAGE:CUDA>:-O0>
 )
 

@@ -1,5 +1,5 @@
 /*
- * cuda__perlin_noise.cu - perlin noise: CUDA implementation
+ * cuda__perlin_noise_v1.cu - perlin noise: CUDA implementation
  *
  */
 
@@ -19,45 +19,11 @@
  * limitations under the License.
  */
 
-// Features
-/*
-    - Generate a perlin noise with octaves
-    - Use a kernel to calculate a perlin noise pixel
-*/
-
-// Future ideas
-/*
-    GENERAL:
-    - Add the permutations instead of gradients giant matrix
-    - Check for variable types used on algorithm 
-      (for example, float, char ... )
-    - Limit the size of the variables of the image to avoid 
-      crash or too large outputs
-    
-    FOR CUDA:
-    - Generate gradients with a kernel
-    - Manage chunks and octaves on device
-    - try to convert the output on the wanted format 
-      directly on the kernel (not in CPU)
-    - Adapt the algorithm execution to the device hardware capabilities
-      (for example, block_size )
-      - remove std functions from kernel
-
-      PROF LEZIONE
-    Non usare double usa float
-    Evitare funzioni della std library all'interno del kernel
-    Usare tipi di dato più piccoli (es char)
-    Evitare if all'interno del kernel
-    
-*/
-
 #include "utils_global.hpp"
 #include "utils_cuda.hpp"
-#include "perlin_noise.hpp"
+#include "options.hpp"
 
 #include <cuda_runtime.h>
-#include <stdio.h>
-#include <curand_kernel.h>
 #include <algorithm>
 #include <inttypes.h>
 #include <cmath>
@@ -68,90 +34,100 @@
 #include <iostream>
 #include <fstream>
 
+#include <cstdint>  // Risolve: error: identifier "uint8_t" is undefined
+#include <string>   // Necessario per std::string
+#include <cctype>   // Risolve il warning/errore su std::tolower
+
 /* device variables */
 #define BLOCK_SIZE 32
 
 /* chunk variables */
-#define NOISE_GRID_CELL_SIZE 64
+#define CHUNK_SIDE_LENGTH 32
+
+// Declaring the global gradients' vectors
+/*
+*/
+__device__ __constant__ Vector2D d_gradients[8] = {
+    {1,1}, {-1,1}, {1,-1}, {-1,-1}, {1,0}, {-1,0}, {0,1}, {0,-1}
+};
 
 /**
- * @brief Kernel to generate Perlin noise for each pixel
- *  
+ * @brief CUDA kernel to generate Perlin noise for each pixel
  */
 __global__ void gpu_generate_perlin_pixel(
-    float * buffer, // reference to global float buffer
-    int seed, 
-    int image_width,
-    int image_height,
-    const Vector2D* gradients,
+    float* accumulator,
+    int width,
+    int height,
+    const int* lookUpTable,
     float frequency,
     float amplitude,
-    int chunks_count_x,
-    int chunks_count_y,
     int offset_x,
     int offset_y
 ) {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
 
-    if ( x >= image_width || y >= image_height ) 
+    if (x >= width || y >= height) 
         return;
 
-    // normalized coordinates scaled by frequency
-    //float lerp_coeff =  image_width < image_height ? image_height : image_width;
-    float fx = ((float)(x + offset_x) / (float)image_width) * frequency;
-    float fy = ((float)(y + offset_y) / (float)image_height) * frequency;
+    // Get the pixel global coordinates with:
+    // - offset
+    // - frequency scaling (aspect ratio to 1:1)
+    float max_dimension = (float)((width > height) ? width : height);
+    float noise_x = ((float)(x + offset_x) / max_dimension) * frequency;
+    float noise_y = ((float)(y + offset_y) / max_dimension) * frequency;
 
-    // integer grid cell
-    int x0 = (int)std::floor(fx);
-    int y0 = (int)std::floor(fy);
-    int x1 = x0 + 1;
-    int y1 = y0 + 1;
+    // Determine the integer coordinates of the cell
+    // (grid square) that contains this point
+    int cell_left = (int)floorf(noise_x);
+    int cell_top = (int)floorf(noise_y);
 
-    // local coordinates within the cell
-    float sx = fx - (float)x0;
-    float sy = fy - (float)y0;
+    // Get the pixel local coordinates inside the chunk 
+    float local_x = noise_x - (float)cell_left;
+    float local_y = noise_y - (float)cell_top;
 
-    // corner gradients (shared from global grid)
-    // uses 1D index: Index = y * num_cols + x
-    // Use positive modulo for proper wrapping with negative indices
-    int grad_x0 = ((x0 % chunks_count_x) + chunks_count_x) % chunks_count_x;
-    int grad_y0 = ((y0 % chunks_count_y) + chunks_count_y) % chunks_count_y;
-    int grad_x1 = ((x1 % chunks_count_x) + chunks_count_x) % chunks_count_x;
-    int grad_y1 = ((y1 % chunks_count_y) + chunks_count_y) % chunks_count_y;
+    // Wrap cell coordinates to [0, 255] for indexing the permutation table
+    // The & 255 operation is equivalent to modulo 256 but faster
+    int xi = cell_left & 255;
+    int yi = cell_top & 255;
 
-    // tl (top-left)
-    const Vector2D& g00 = gradients[grad_y0 * chunks_count_x + grad_x0];  
-    // tr (top-right)
-    const Vector2D& g10 = gradients[grad_y0 * chunks_count_x + grad_x1];  
-    // bl (bottom-left)
-    const Vector2D& g01 = gradients[grad_y1 * chunks_count_x + grad_x0];  
-    // br (bottom-right)
-    const Vector2D& g11 = gradients[grad_y1 * chunks_count_x + grad_x1];
+    // Use the permutation table to get pseudo-random gradient indices at the four corners of the cell
+    int grad_index_top_left     = lookUpTable[lookUpTable[xi]     + yi] & 7;
+    int grad_index_top_right    = lookUpTable[lookUpTable[xi + 1] + yi] & 7;
+    int grad_index_bottom_left  = lookUpTable[lookUpTable[xi]     + yi + 1] & 7;
+    int grad_index_bottom_right = lookUpTable[lookUpTable[xi + 1] + yi + 1] & 7;
 
-    // distance vectors
-    Vector2D d00(sx,     sy);
-    Vector2D d10(sx - 1, sy);
-    Vector2D d01(sx,     sy - 1);
-    Vector2D d11(sx - 1, sy - 1);
+    // Select the gradient vectors corresponding to these indices
+    const Vector2D grad_top_left     = d_gradients[grad_index_top_left];
+    const Vector2D grad_top_right    = d_gradients[grad_index_top_right];
+    const Vector2D grad_bottom_left  = d_gradients[grad_index_bottom_left];
+    const Vector2D grad_bottom_right = d_gradients[grad_index_bottom_right];
 
-    // dot products
-    float dot00 = g00.dot(d00);
-    float dot10 = g10.dot(d10);
-    float dot01 = g01.dot(d01);
-    float dot11 = g11.dot(d11);
+    // Compute vectors from each corner of the cell to the pixel's location
+    Vector2D dist_to_top_left     (local_x,        local_y);
+    Vector2D dist_to_top_right    (local_x - 1.0f, local_y);
+    Vector2D dist_to_bottom_left  (local_x,        local_y - 1.0f);
+    Vector2D dist_to_bottom_right (local_x - 1.0f, local_y - 1.0f);
 
-    // fade curves
-    float u = fade(sx);
-    float v = fade(sy);
+    // Calculate the dot product between distance vectors and gradient vectors
+    // This gives the influence (contribution) of each corner on the final noise value
+    float influence_top_left     = grad_top_left.dot(dist_to_top_left);
+    float influence_top_right    = grad_top_right.dot(dist_to_top_right);
+    float influence_bottom_left  = grad_bottom_left.dot(dist_to_bottom_left);
+    float influence_bottom_right = grad_bottom_right.dot(dist_to_bottom_right);
 
-    // bilinear interpolation
-    float nx0 = lerp(dot00, dot10, u);
-    float nx1 = lerp(dot01, dot11, u);
-    float value = lerp(nx0, nx1, v);
+    // Interpolate the influences along the x-axis using a fade function for smoothness
+    float u = fade(local_x);
+    float v = fade(local_y);
+    
+    float interp_top    = lerp(influence_top_left, influence_top_right, u);
+    float interp_bottom = lerp(influence_bottom_left, influence_bottom_right, u);
+    
+    // Interpolate the top and bottom results along the y-axis to get the final Perlin noise value
+    float pixel_noise_value = lerp(interp_top, interp_bottom, v);
 
-    // multiply by amplitude for THIS octave
-    buffer[y * image_width + x] += value * amplitude;  // ADDED: accumulate float noise
+    // Accumulate the computed noise into the output array, scaling by the amplitude
+    accumulator[y * width + x] += pixel_noise_value * amplitude;
 }
 
 
@@ -171,6 +147,7 @@ void generate_perlin_noise(const Options& opts) {
     int offset_y = opts.offset_y;
     bool no_outputs = opts.no_outputs;
     bool verbose = opts.verbose;
+    bool benchmark = opts.benchmark;
 
     // output info
     std::string output_filename = opts.output_filename;
@@ -179,8 +156,26 @@ void generate_perlin_noise(const Options& opts) {
     /* randomize from seed */
     srand(seed);
 
+    /* build the permutation tables */
+    std::vector<int> lookUpTable(512);
+    for (int i = 0; i < 256; i++) lookUpTable[i] = i;
+
+    // shuffling the table with Fisher-Yates approach
+    for (int i = 255; i > 0; i--) {
+        int j = rand() % (i + 1);
+        std::swap(lookUpTable[i], lookUpTable[j]);
+    }
+
+    // avoid overflows doubling the table
+    for (int i = 0; i < 256; i++) lookUpTable[256 + i] = lookUpTable[i];
+
     /* start profiling timers */
-    auto start_total = std::chrono::high_resolution_clock::now();
+    std::chrono::high_resolution_clock::time_point wall_start;
+    clock_t cpu_start = 0;
+    if (benchmark) {
+        wall_start = std::chrono::high_resolution_clock::now();
+        cpu_start = std::clock();
+    }
 
     /* setting CUDA DEVICE */
     int dev = 0;
@@ -188,7 +183,7 @@ void generate_perlin_noise(const Options& opts) {
     CHECK(cudaGetDeviceProperties(&deviceProp, dev));
     CHECK(cudaSetDevice(dev));
     
-    /* allocate device memory for output */
+    /* allocate device memory */
     dim3 block(BLOCK_SIZE, BLOCK_SIZE);
     dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
     
@@ -198,38 +193,17 @@ void generate_perlin_noise(const Options& opts) {
     
     // device accumulator
     size_t buffer_size = width * height * sizeof(float);
-    float * d_accumulator;
-    CHECK(cudaMalloc((void **)&d_accumulator, buffer_size));
+    float* d_accumulator;
+    CHECK(cudaMalloc((void**)&d_accumulator, buffer_size));
 
     // initialize device accumulator to zero
     CHECK(cudaMemset(d_accumulator, 0, buffer_size));
     
-    /* calculate chunk grid size */
-    int chunks_count_x = (width  + NOISE_GRID_CELL_SIZE - 1) / NOISE_GRID_CELL_SIZE;
-    int chunks_count_y = (height + NOISE_GRID_CELL_SIZE - 1) / NOISE_GRID_CELL_SIZE;
-    
-    /* initialize gradient vectors */
-    // host gradient vectors
-    int gradients_size = chunks_count_x * chunks_count_y;
-    std::vector<Vector2D> h_gradients(gradients_size);
-    
-    for (int gx = 0; gx < chunks_count_x; gx++) {
-        for (int gy = 0; gy < chunks_count_y; gy++) {
-            float rx = (float)rand() / RAND_MAX * 2.0f - 1.0f;
-            float ry = (float)rand() / RAND_MAX * 2.0f - 1.0f;
-            
-            int idx = gy * chunks_count_x + gx; 
-            h_gradients[idx] = Vector2D(rx, ry).normalize();
-        }
-    }
-
-    // device gradient vectors
-    Vector2D* d_gradients;
-    size_t gradients_buffer_size = gradients_size * sizeof(Vector2D);
-    CHECK(cudaMalloc((void **)&d_gradients, gradients_buffer_size));
-
-    // host -> device copy
-    CHECK(cudaMemcpy(d_gradients, h_gradients.data(), gradients_buffer_size, cudaMemcpyHostToDevice));
+    /* copy lookUpTable to device */
+    int* d_lookUpTable;
+    size_t lookUpTable_size = lookUpTable.size() * sizeof(int);
+    CHECK(cudaMalloc((void**)&d_lookUpTable, lookUpTable_size));
+    CHECK(cudaMemcpy(d_lookUpTable, lookUpTable.data(), lookUpTable_size, cudaMemcpyHostToDevice));
 
     /* CUDA Events for Kernel Timing */
     cudaEvent_t start_kernel, stop_kernel;
@@ -243,14 +217,32 @@ void generate_perlin_noise(const Options& opts) {
     float frequency = base_frequency;
     float amplitude = base_amplitude;
     
+    //AAAAAAAAAAAAAAAA
+    Vector2D h_gradients[8] = {
+        {1.0f,1.0f}, {-1.0f,1.0f}, {1.0f,-1.0f}, {-1.0f,-1.0f},
+        {1.0f,0.0f}, {-1.0f,0.0f}, {0.0f,1.0f}, {0.0f,-1.0f}
+    };
+    CHECK(cudaMemcpyToSymbol(d_gradients, h_gradients, sizeof(Vector2D) * 8));
+    //AAAAAAAAAAAAAAAA
+
     for (int o = 0; o < octaves; o++) {
         
         /* launch the kernel */
-        // generate noise for this octave using the chunk pipeline
-        gpu_generate_perlin_pixel<<<grid, block>>>(d_accumulator, seed, width, height, d_gradients, frequency, amplitude, chunks_count_x, chunks_count_y, offset_x, offset_y);
+        gpu_generate_perlin_pixel<<<grid, block>>>(
+            d_accumulator, 
+            width, 
+            height, 
+            d_lookUpTable,
+            frequency, 
+            amplitude, 
+            offset_x, 
+            offset_y
+        );
 
-        frequency *= lacunarity;   // controls frequency growth
-        amplitude *= persistence;  // controls amplitude decay
+        // controls frequency growth
+        frequency *= lacunarity;
+        // controls amplitude decay
+        amplitude *= persistence;
     }
 
     /* Stop Kernel Timer */
@@ -263,66 +255,90 @@ void generate_perlin_noise(const Options& opts) {
     float kernel_ms = 0.0f;
     CHECK(cudaEventElapsedTime(&kernel_ms, start_kernel, stop_kernel));
     
-    /* Calculate profiling metrics */
-    int total_threads = width * height;
-    float time_per_pixel = kernel_ms / total_threads;
-    int chunks_total = chunks_count_x * chunks_count_y;
-    size_t total_memory = buffer_size + gradients_buffer_size;
-   
-    /* copy and free the result from the device to the output pointer */
+    /* copy result from device to host */
     CHECK(cudaMemcpy(accumulator.data(), d_accumulator, buffer_size, cudaMemcpyDeviceToHost));
+    
+    /* free device memory */
     CHECK(cudaFree(d_accumulator));
-    CHECK(cudaFree(d_gradients));
+    CHECK(cudaFree(d_lookUpTable));
 
     /* Destroy CUDA Events */
     CHECK(cudaEventDestroy(start_kernel));
     CHECK(cudaEventDestroy(stop_kernel));
 
-    /* convert accumulator to final 0-255 output */
-    unsigned int channels = 1;
-    std::vector<unsigned char> output(width * height * channels, 0);
+    /* stop profiling timers and report */
+    if (benchmark) {
+        clock_t cpu_end = std::clock();
+        auto wall_end = std::chrono::high_resolution_clock::now();
 
-    for (int i = 0; i < width * height; i++) {
+        double cpu_ticks = static_cast<double>(cpu_end - cpu_start);
+        double cpu_seconds = cpu_ticks / static_cast<double>(CLOCKS_PER_SEC);
+        double wall_ms = std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(wall_end - wall_start).count();
 
-        // normalize fractal sum back to [-1,1]
-        float v = accumulator[i];
+        size_t num_pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
+        double ms_per_pixel = (num_pixels > 0) ? (wall_ms / (double)num_pixels) : 0.0;
 
-        v = std::clamp(v, -1.0f, 1.0f);
+        size_t lookUpTable_bytes = lookUpTable_size;
+        size_t accumulator_bytes = buffer_size;
+        size_t estimated_total_alloc = lookUpTable_bytes + accumulator_bytes;
 
-        output[i] = static_cast<unsigned char>((v + 1.0f) * 0.5f * 255.0f);
+        std::time_t now = std::time(nullptr);
+        //std::cout << "timestamp,width,height,pixels,octaves,frequency,wall_ms,cpu_s,ms_per_pixel,mem_bytes\n";
+        std::cout << now << ","
+                  << width << ","
+                  << height << ","
+                  << num_pixels << ","
+                  << octaves << ","
+                  << base_frequency << ","
+                  << wall_ms << ","
+                  << cpu_seconds << ","
+                  << ms_per_pixel << ","
+                  << estimated_total_alloc << std::endl;
     }
 
-    /* Stop Total Time Measurement */
-    auto end_total = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> total_s = end_total - start_total;
-
     if (verbose) {
+        size_t num_pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
+        double ms_per_pixel = (num_pixels > 0) ? (kernel_ms / (double)num_pixels) : 0.0;
+        
+        int chunks_count_x = (width + CHUNK_SIDE_LENGTH - 1) / CHUNK_SIDE_LENGTH;
+        int chunks_count_y = (height + CHUNK_SIDE_LENGTH - 1) / CHUNK_SIDE_LENGTH;
+        int chunks_total = chunks_count_x * chunks_count_y;
+        
+        size_t total_memory = buffer_size + lookUpTable_size;
+        
         printf("\nProfiling:\n");
         printf("  kernel time       = %.3f ms\n", kernel_ms);
-        printf("  total time        = %.3f s\n", total_s.count());
-        printf("  time / pixel      = %.6f ms\n", time_per_pixel);
+        printf("  time / pixel      = %.6f ms\n", ms_per_pixel);
         printf("  grid blocks       = %dx%d (total %d)\n", 
             (width + block.x - 1) / block.x, 
             (height + block.y - 1) / block.y,
             ((width + block.x - 1) / block.x) * ((height + block.y - 1) / block.y));
         printf("  block size        = %dx%d (threads: %d)\n", block.x, block.y, block.x * block.y);
         printf("  chunks            = %dx%d (total %d)\n", chunks_count_x, chunks_count_y, chunks_total);
-        printf("  mem (approx)      = %zu bytes (gradients %zu + accumulator %zu)\n", 
-            total_memory, gradients_buffer_size, buffer_size);
+        printf("  mem (approx)      = %zu bytes (lookUpTable %zu + accumulator %zu)\n", 
+            total_memory, lookUpTable_size, buffer_size);
         printf("  device            = %s\n", deviceProp.name);
         printf("\n");
     }
 
-    if (!no_outputs){
+    /* save the generated noise image */
+    if (!no_outputs) {
+
+        // create the output array
+        std::vector<uint8_t> output(width * height, 0);
+        for (int i = 0; i < width * height; i++) {
+            // mapping the accumulator (-1, 1) to grayscaled pixels (0-255)
+            float v = std::clamp(accumulator[i], -1.0f, 1.0f);
+            output[i] = static_cast<uint8_t>((v + 1.0f) * 0.5f * 255.0f);
+        }
+
         save_output(
             output,
             width,
             height,
-            channels,
+            1, // only 1 channel, b&w
             output_filename,
             output_format
         );
     }
 }
-
-
