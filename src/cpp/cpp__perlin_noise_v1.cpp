@@ -21,7 +21,6 @@
 
 #include "perlin_noise.hpp"
 #include "utils_global.hpp"
-#include "utils_cpu.hpp"
 
 #include <algorithm>
 #include <inttypes.h>
@@ -33,8 +32,68 @@
 #include <iostream>
 #include <fstream>
 
+
 /* chunk variables */
 #define CHUNK_SIDE_LENGTH 32
+
+
+
+/**
+ * @brief Smoothing function for Perlin noise
+ * @param t 
+ * @return float 
+ */
+static float fade(float t) {
+    return t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
+}
+
+
+
+/** 
+ * @brief Linear interpolation
+ * @param a 
+ * @param b 
+ * @param t 
+ * @return float 
+ */
+static float lerp(float a, float b, float t) {
+    return a + t * (b - a);
+}
+
+
+
+/**
+ * @brief Simple 2D vector structure
+ * 
+ */
+struct Vector2D {
+    float x = 0.0f;
+    float y = 0.0f;
+
+    Vector2D() = default;
+
+    Vector2D(float x_, float y_) : x(x_), y(y_) {}
+
+    Vector2D operator-(const Vector2D& other) const {
+        return {x - other.x, y - other.y};
+    }
+
+    float dot(const Vector2D& other) const {
+        return x * other.x + y * other.y;
+    }
+
+    float length() const {
+        return std::sqrt(x * x + y * y);
+    }
+
+    Vector2D normalize() const {
+        float len = length();
+        return len > 0 ? Vector2D(x / len, y / len) : Vector2D(0, 0);
+    }
+};
+
+
+
 
 /**
  * @brief Chunk: represents a square section of the noise map
@@ -63,6 +122,7 @@ struct Chunk {
         int start_y = chunk_y * CHUNK_SIDE_LENGTH;
         int end_x = std::min(start_x + CHUNK_SIDE_LENGTH, width);
         int end_y = std::min(start_y + CHUNK_SIDE_LENGTH, height);
+        
         // Get the pixel global coordinates with:
         // - offset
         // - frequency scaling (aspect ratio to 1:1)
@@ -122,6 +182,8 @@ struct Chunk {
         }
     }
 };
+
+
 
 void generate_perlin_noise(const Options& opts) {
 

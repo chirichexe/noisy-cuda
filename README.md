@@ -32,7 +32,7 @@ This project supports both CPU and GPU acceleration. CUDA toolkit is required fo
 
 ```sh
 # Build CUDA backend
-cmake -B build_cuda -DUSE_CUDA=ON
+cmake -B build_cuda -DUSE_CUDA=ON -DCUDA_VERSION=v1
 cmake --build build_cuda
 
 # Build SIMD backend version v1
@@ -40,7 +40,7 @@ cmake -B build_simd -DUSE_SIMD=ON -DSIMD_VERSION=v1
 cmake --build build_simd
 
 # Build C++ backend (CPU only)
-cmake -B build_cpp -DUSE_CPP=ON
+cmake -B build_cpp -DUSE_CPP=ON -DCPP_VERSION=v1
 cmake --build build_cpp
 ```
 

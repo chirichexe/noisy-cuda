@@ -1,9 +1,14 @@
 cmake_minimum_required(VERSION 3.18)
-project(noisy_cuda LANGUAGES CXX CUDA)
 
 option(USE_CUDA "Build CUDA backend" OFF)
 option(USE_SIMD "Build SIMD backend" OFF)
 option(USE_CPP  "Build pure C++ backend" OFF)
+
+if(USE_CUDA)
+    project(noisy_cuda LANGUAGES CXX CUDA)
+else()
+    project(noisy_cuda LANGUAGES CXX)
+endif()
 
 set(COMMON_SRC
     src/main.cpp
