@@ -89,78 +89,86 @@ __device__ __forceinline__ float lerp(float a, float b, float t) {
 /**
  * @brief CUDA kernel con Shared Memory e __syncthreads()
  */
-__global__ void perlin_noise_kernel(
-    float* accumulator,
+/**
+ * @brief CUDA kernel con Kernel Fusion e Shared Memory
+ */
+__global__ void perlin_noise_fused_kernel(
+    float* output,
     int width,
     int height,
-    float frequency,
-    float amplitude,
+    int octaves,
+    float base_frequency,
+    float base_amplitude,
+    float lacunarity,
+    float persistence,
     int offset_x,
     int offset_y
 ) {
-    // 1. Dichiarazione Shared Memory per la lookup table (solo 512 int)
+    // 1. Caricamento collaborativo in Shared Memory (come prima)
     __shared__ int s_lookUpTable[512];
-
-    // 2. Caricamento collaborativo: ogni thread carica uno o più elementi
     int tid = threadIdx.y * blockDim.x + threadIdx.x;
     int threads_per_block = blockDim.x * blockDim.y;
 
     for (int i = tid; i < 512; i += threads_per_block) {
         s_lookUpTable[i] = d_lookUpTable[i];
     }
-
-    // 3. BARRIERA: Aspetta che TUTTI i thread abbiano finito il caricamento
-    // Senza questo, i thread potrebbero leggere valori non ancora scritti!
     __syncthreads();
 
-    // --- Inizio calcolo normale ---
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
 
     if (x >= width || y >= height) return;
 
     float max_dimension = fmaxf((float)width, (float)height);
-    float noise_x = ((float)(x + offset_x) / max_dimension) * frequency;
-    float noise_y = ((float)(y + offset_y) / max_dimension) * frequency;
-
-    int cell_left = __float2int_rd(noise_x);
-    int cell_top  = __float2int_rd(noise_y);
-
-    float local_x = noise_x - (float)cell_left;
-    float local_y = noise_y - (float)cell_top;
-
-    int xi = cell_left & 255;
-    int yi = cell_top  & 255;
-
-    // 4. Utilizzo della SHARED memory invece della CONSTANT
-    int grad_index_top_left     = s_lookUpTable[ s_lookUpTable[xi]     + yi] & 7;
-    int grad_index_top_right    = s_lookUpTable[ s_lookUpTable[xi + 1] + yi] & 7;
-    int grad_index_bottom_left  = s_lookUpTable[ s_lookUpTable[xi]     + yi + 1] & 7;
-    int grad_index_bottom_right = s_lookUpTable[ s_lookUpTable[xi + 1] + yi + 1] & 7;
-
-    // ... (resto del calcolo invariato)
-    auto grad_tl = d_gradients[grad_index_top_left];
-    float influence_top_left = grad_tl.x * local_x + grad_tl.y * local_y;
-
-    auto grad_tr = d_gradients[grad_index_top_right];
-    float influence_top_right = grad_tr.x * (local_x - 1.0f) + grad_tr.y * local_y;
-
-    auto grad_bl = d_gradients[grad_index_bottom_left];
-    float influence_bottom_left = grad_bl.x * local_x + grad_bl.y * (local_y - 1.0f);
-
-    auto grad_br = d_gradients[grad_index_bottom_right];
-    float influence_bottom_right = grad_br.x * (local_x - 1.0f) + grad_br.y * (local_y - 1.0f);
-
-    float u = fade(local_x);
-    float v = fade(local_y);
-
-    float interp_top    = lerp(influence_top_left, influence_top_right, u);
-    float interp_bottom = lerp(influence_bottom_left, influence_bottom_right, u);
     
-    float pixel_noise_value = lerp(interp_top, interp_bottom, v);
+    // Variabili per l'accumulo locale (registri)
+    float total_noise = 0.0f;
+    float frequency = base_frequency;
+    float amplitude = base_amplitude;
 
+    // 2. CICLO OTTAVE SPOSTATO DENTRO IL KERNEL
+    for (int o = 0; o < octaves; o++) {
+        float noise_x = ((float)(x + offset_x) / max_dimension) * frequency;
+        float noise_y = ((float)(y + offset_y) / max_dimension) * frequency;
+
+        int cell_left = __float2int_rd(noise_x);
+        int cell_top  = __float2int_rd(noise_y);
+
+        float local_x = noise_x - (float)cell_left;
+        float local_y = noise_y - (float)cell_top;
+
+        int xi = cell_left & 255;
+        int yi = cell_top  & 255;
+
+        // Lookup degli indici dei gradienti
+        int gi00 = s_lookUpTable[s_lookUpTable[xi] + yi] & 7;
+        int gi01 = s_lookUpTable[s_lookUpTable[xi] + yi + 1] & 7;
+        int gi10 = s_lookUpTable[s_lookUpTable[xi + 1] + yi] & 7;
+        int gi11 = s_lookUpTable[s_lookUpTable[xi + 1] + yi + 1] & 7;
+
+        // Calcolo influenze (utilizzando d_gradients in memoria costante)
+        float dot00 = d_gradients[gi00].x * local_x + d_gradients[gi00].y * local_y;
+        float dot10 = d_gradients[gi10].x * (local_x - 1.0f) + d_gradients[gi10].y * local_y;
+        float dot01 = d_gradients[gi01].x * local_x + d_gradients[gi01].y * (local_y - 1.0f);
+        float dot11 = d_gradients[gi11].x * (local_x - 1.0f) + d_gradients[gi11].y * (local_y - 1.0f);
+
+        float u = fade(local_x);
+        float v = fade(local_y);
+
+        float interp_x1 = lerp(dot00, dot10, u);
+        float interp_x2 = lerp(dot01, dot11, u);
+        
+        // Accumulo il rumore dell'ottava corrente
+        total_noise += lerp(interp_x1, interp_x2, v) * amplitude;
+
+        // Aggiornamento parametri per la prossima ottava
+        frequency *= lacunarity;
+        amplitude *= persistence;
+    }
+
+    // 3. SCRITTURA UNICA nella memoria globale
     int idx = y * width + x;
-    accumulator[idx] += pixel_noise_value * amplitude;
+    output[idx] = total_noise;
 }
 
 void generate_perlin_noise(const Options& opts) {
@@ -227,29 +235,28 @@ void generate_perlin_noise(const Options& opts) {
     dim3 gridSize((width + blockSize.x - 1) / blockSize.x,
                   (height + blockSize.y - 1) / blockSize.y);
 
-    if (benchmark) {
-        CHECK(cudaEventRecord(cuda_start));
-    }
-
+                  
     /* octave loop */
     float frequency = base_frequency;
     float amplitude = base_amplitude;
-
-    for (int o = 0; o < octaves; o++) {
-        perlin_noise_kernel<<<gridSize, blockSize>>>(
-            d_accumulator,
-            width,
-            height,
-            frequency,
-            amplitude,
-            offset_x,
-            offset_y
-        );
-        CHECK(cudaGetLastError());
-
-        frequency *= lacunarity;
-        amplitude *= persistence;
+                  
+    if (benchmark) {
+        CHECK(cudaEventRecord(cuda_start));
     }
+    // Un'unica chiamata al kernel per tutte le ottave
+    perlin_noise_fused_kernel<<<gridSize, blockSize>>>(
+        d_accumulator,
+        width,
+        height,
+        octaves,
+        base_frequency,
+        base_amplitude,
+        (float)lacunarity,
+        persistence,
+        offset_x,
+        offset_y
+    );
+    CHECK(cudaGetLastError());
 
     CHECK(cudaDeviceSynchronize());
 
