@@ -139,8 +139,6 @@ struct Chunk {
                 // (grid square) that contains this point
                 int cell_left = (int)std::floor(noise_x);
                 int cell_top = (int)std::floor(noise_y);
-                int cell_right = cell_left + 1;
-                int cell_bottom = cell_top + 1;
 
                 // Get the pixel local coordinates inside the chunk 
                 float local_x = noise_x - (float)cell_left;
@@ -208,7 +206,7 @@ void generate_perlin_noise(const Options& opts) {
     int offset_x = opts.offset_x;
     int offset_y = opts.offset_y;
     bool no_outputs = opts.no_outputs;
-    bool verbose = opts.verbose;
+    //bool verbose = opts.verbose;
     bool benchmark = opts.benchmark;
 
     // output info

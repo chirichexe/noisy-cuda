@@ -34,13 +34,12 @@
 #include <iostream>
 #include <fstream>
 #include <cuda_runtime.h>
+#include <cmath>
+
 
 /* chunk variables */
-#define CHUNK_SIDE_LENGTH 32
-
 #define BLOCK_SIZE 16
 
-#include <cmath>
 
 /**
  * @brief Simple 2D vector structure
@@ -98,6 +97,11 @@ __device__ float lerp(float a, float b, float t) {
 __constant__ int d_lookUpTable[512];
 __constant__ Vector2D d_gradients[8];
 
+// Declaring the global gradients' vectors
+const Vector2D gradients[] = {
+    {1,1}, {-1,1}, {1,-1}, {-1,-1}, {1,0}, {-1,0}, {0,1}, {0,-1}
+};
+
 /**
  * @brief CUDA kernel for Perlin noise generation
  */
@@ -126,8 +130,6 @@ __global__ void perlin_noise_kernel(
     // (grid square) that contains this point
     int cell_left = (int)floorf(noise_x);
     int cell_top = (int)floorf(noise_y);
-    int cell_right = cell_left + 1;
-    int cell_bottom = cell_top + 1;
 
     // Get the pixel local coordinates inside the chunk 
     float local_x = noise_x - (float)cell_left;
@@ -189,7 +191,7 @@ void generate_perlin_noise(const Options& opts) {
     int offset_x = opts.offset_x;
     int offset_y = opts.offset_y;
     bool no_outputs = opts.no_outputs;
-    bool verbose = opts.verbose;
+    //bool verbose = opts.verbose;
     bool benchmark = opts.benchmark;
 
     // output info
@@ -212,15 +214,6 @@ void generate_perlin_noise(const Options& opts) {
     // avoid overflows doubling the table
     for (int i = 0; i < 256; i++) lookUpTable[256 + i] = lookUpTable[i];
 
-    // Declaring the global gradients' vectors
-    const Vector2D gradients[] = {
-        {1,1}, {-1,1}, {1,-1}, {-1,-1}, {1,0}, {-1,0}, {0,1}, {0,-1}
-    };
-
-    // Copy lookup table and gradients to constant memory
-    CHECK(cudaMemcpyToSymbol(d_lookUpTable, lookUpTable.data(), 512 * sizeof(int)));
-    CHECK(cudaMemcpyToSymbol(d_gradients, gradients, 8 * sizeof(Vector2D)));
-
     /* start profiling timers */
     std::chrono::high_resolution_clock::time_point wall_start;
     clock_t cpu_start = 0;
@@ -233,6 +226,10 @@ void generate_perlin_noise(const Options& opts) {
         CHECK(cudaEventCreate(&cuda_stop));
         CHECK(cudaEventRecord(cuda_start));
     }
+
+    // Copy lookup table and gradients to constant memory
+    CHECK(cudaMemcpyToSymbol(d_lookUpTable, lookUpTable.data(), 512 * sizeof(int)));
+    CHECK(cudaMemcpyToSymbol(d_gradients, gradients, 8 * sizeof(Vector2D)));
 
     /* float accumulation accumulator (needed for octaves) */
     std::vector<float> accumulator(width * height, 0.0f);
@@ -252,6 +249,7 @@ void generate_perlin_noise(const Options& opts) {
     float amplitude = base_amplitude;
 
     for (int o = 0; o < octaves; o++) {
+        
         // Copy accumulator to device
         CHECK(cudaMemcpy(d_accumulator, accumulator.data(), accumulator_bytes, cudaMemcpyHostToDevice));
 
@@ -265,6 +263,7 @@ void generate_perlin_noise(const Options& opts) {
             offset_x,
             offset_y
         );
+        
         CHECK(cudaGetLastError());
         CHECK(cudaDeviceSynchronize());
 

@@ -55,7 +55,7 @@ Options parse_options(int argc, char** argv) {
         "  -L, --lacunarity <float>  Frequency multiplier per octave. Default: 2.0\n"
         "  -P, --persistence <float> Amplitude multiplier per octave. Default: 0.5\n"
         "  -O, --offset <x,y>        Offset for the noise generation. Default: 0,0\n"
-        "  -C, --octaves <int>       Number of octaves (>=1). Default: 1\n";
+        "  -C, --octaves <int>       Number of octaves (>=1). Default: 4\n";
     };
 
     auto show_version = []() {

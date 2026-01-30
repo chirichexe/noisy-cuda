@@ -21,3 +21,20 @@
 
 > Le permutazioni servono a introdurre pseudo-casualità deterministica nella scelta dei gradienti partendo da una griglia regolare. Trasformano le coordinate intere in un indice apparentemente casuale, evitando pattern ripetitivi e allineamenti visibili nel noise. Allo stesso tempo garantiscono che lo stesso punto produca sempre lo stesso risultato, rendendo il rumore stabile e riproducibile. Sono usate perché sono semplici, veloci e permettono di controllare la periodicità del noise senza ricorrere a generatori casuali costosi.
 
+# CUDA
+
+## Versione 1
+
+* **Descrizione generale**
+
+- Implementazione di Perlin Noise in CUDA (uguale alla versione 2 C++). 
+- Strutture dati: 
+    - `Vector2D`: vettore bidimensionale (2 float) con operazioni utili nell'algoritmo, funzioni di fade e lerp con i tag specifici per essere eseguiti sul device
+
+
+- Rimossa la struttura `Chunk`, l'algoritmo viene eseguito direttamente in un SM del device
+- La `CHUNK_SIZE_LENGHT` è diventata `BLOCK_SIZE` impostata a 16.
+  Compromesso perfetto (256 thread per blocco, non satura ne spreca computability)
+    (mettere screen occupancy)
+
+cosa notiamo? memory bound
