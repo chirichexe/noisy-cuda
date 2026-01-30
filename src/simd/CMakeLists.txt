@@ -1,6 +1,5 @@
 set(SIMD_VERSION "latest" CACHE STRING "SIMD backend version (v1, v2, v3, or latest)")
 
-# find all versioned source files
 file(GLOB SIMD_VERSIONED_FILES "${CMAKE_CURRENT_SOURCE_DIR}/simd__perlin_noise_v*.cpp")
 
 set(SIMD_VERSIONS "")
@@ -21,7 +20,6 @@ message(STATUS "Building SIMD backend version: ${SIMD_VERSION}")
 
 set(SIMD_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/simd__perlin_noise_${SIMD_VERSION}.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/simd__utils.cpp"
 )
 
 if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/simd__perlin_noise_${SIMD_VERSION}.cpp")
@@ -29,6 +27,12 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/simd__perlin_noise_${SIMD_VERSION}.cp
 endif()
 
 add_library(perlin_simd STATIC ${SIMD_SRC})
+
+if(NOT MSVC)
+    target_compile_options(perlin_simd PRIVATE -mavx2 -mfma -O0)
+else()
+    target_compile_options(perlin_simd PRIVATE /arch:AVX2)
+endif()
 
 target_include_directories(perlin_simd PRIVATE ${CMAKE_SOURCE_DIR}/include)
 

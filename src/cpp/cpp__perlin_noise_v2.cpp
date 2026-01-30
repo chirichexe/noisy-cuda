@@ -59,8 +59,6 @@ static float lerp(float a, float b, float t) {
     return a + t * (b - a);
 }
 
-
-
 /**
  * @brief Simple 2D vector structure
  * 
