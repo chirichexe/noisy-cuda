@@ -96,7 +96,7 @@ To run the C++ benchmark test in v1 and v2, use the following command:
 ### Start CUDA Nsight Compute profiling
 
 ```sh
-ncu -o cuda --target-processes all ./build/cuda/noisy_cuda
+ncu -o cuda --target-processes all --set full ./build/cuda/noisy_cuda
 ```
 
 # Examples
