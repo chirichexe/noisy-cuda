@@ -241,17 +241,20 @@ void generate_perlin_noise(const Options& opts) {
 
     // Configure kernel launch parameters
     dim3 blockSize(BLOCK_SIZE, BLOCK_SIZE);
-    dim3 gridSize((width + blockSize.x - 1) / blockSize.x,
-                  (height + blockSize.y - 1) / blockSize.y);
+    dim3 gridSize(
+        (width + blockSize.x - 1) / blockSize.x,
+        (height + blockSize.y - 1) / blockSize.y
+    );
 
     /* octave loop */
     float frequency = base_frequency;
     float amplitude = base_amplitude;
 
+    // Copy accumulator to device
+    CHECK(cudaMemcpy(d_accumulator, accumulator.data(), accumulator_bytes, cudaMemcpyHostToDevice));
+    
     for (int o = 0; o < octaves; o++) {
         
-        // Copy accumulator to device
-        CHECK(cudaMemcpy(d_accumulator, accumulator.data(), accumulator_bytes, cudaMemcpyHostToDevice));
 
         // generate noise for this octave using the existing chunk pipeline
         perlin_noise_kernel<<<gridSize, blockSize>>>(

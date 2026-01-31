@@ -33,8 +33,17 @@
 
 
 - Rimossa la struttura `Chunk`, l'algoritmo viene eseguito direttamente in un SM del device
-- La `CHUNK_SIZE_LENGHT` è diventata `BLOCK_SIZE` impostata a 16.
-  Compromesso perfetto (256 thread per blocco, non satura ne spreca computability)
+- La `CHUNK_SIZE_LENGHT` è diventata `BLOCK_SIZE` impostata a 16. Perchè?
+    - Le GPU NVIDIA eseguono i thread in gruppi di 32, chiamati Warp. Un blocco da 16×16=256 thread contiene esattamente 8 warp (256/32=8).
+    - Usa molti registri (Vector2D, calcoli matematici...), un blocco da 1024 thread (il massimo) potrebbe impedire ad altri blocchi di caricarsi, lasciando l'SM sotto-utilizzato.
+  
+  16x16 è la via di mezzo perfetta: è abbastanza grande da saturare i warp, ma abbastanza piccolo da permettere a più blocchi di risiedere contemporaneamente sullo stesso SM, aiutando latency hiding.
+    
     (mettere screen occupancy)
+
+- Copia elementi:
+    - `gradients` e `lookUpTable`: memoria costante (R only)
+    - `accumulator`: memoria globale (R - W)
+
 
 cosa notiamo? memory bound
