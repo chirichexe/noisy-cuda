@@ -46,6 +46,23 @@ Test eseguiti su:
 
 NVIDIA GeForce RTX 3050 6GB
 
+configurazioni test:
+
+Configuration:
+  Size:        2048 x 2048
+  Format:      png
+  No output:   enabled
+  Offset:      (0, 0)
+  Seed:        1545174314 (auto-generated)
+  Verbose:     enabled
+
+Generating Perlin noise with options:
+  freq=50
+  amp=1
+  octaves=10
+  lacunarity=2
+  persistence=0.5
+
 ## Versione 1
 
 * **Descrizione generale**
@@ -54,8 +71,8 @@ NVIDIA GeForce RTX 3050 6GB
 - Strutture dati: 
     - `Vector2D`: vettore bidimensionale (2 float) con operazioni utili nell'algoritmo, funzioni di fade e lerp con i tag specifici per essere eseguiti sul device
 
-
 - Rimossa la struttura `Chunk`, l'algoritmo viene eseguito direttamente in un SM del device
+
 - La `CHUNK_SIZE_LENGHT` è diventata `BLOCK_SIZE` impostata a 16. Perchè?
     - Le GPU NVIDIA eseguono i thread in gruppi di 32, chiamati Warp. Un blocco da 16×16=256 thread contiene esattamente 8 warp (256/32=8).
     - Usa molti registri (Vector2D, calcoli matematici...), un blocco da 1024 thread (il massimo) potrebbe impedire ad altri blocchi di caricarsi, lasciando l'SM sotto-utilizzato.
@@ -75,37 +92,73 @@ cosa notiamo? memory bound
 
 RICORDA DI RIMUOVERE FUNZIONI NON USATE
 
-- Massimizzare l'Occupancy e Gestione Registri:
-    - Scomponi la struct Vector2D in variabili scalari (float x, y) riducendo il register pressure
-    - Aumento del Block Size (da 16 a 32 x 32 o 16)
-    - total_noise da mantenere nei registri (velocissimi) per tutte le ottave e scritto in memoria globale una sola volta alla fine per eliminare il collo di bottiglia del bandwidth di memoria per i calcoli intermedi. (vedi v3)
+Dalle slide del pdf memoria comune, il nsotro kernel è "naturalmente" compute bound ma facendo benchmark da nsight compute della v1 si vede che stiamo sfruttando male la memoria (siamo memory bound).
 
-- Ottimizzare l'ILP
-    - spostare il ciclo delle ottave dentro il kernel
-    - Loop Unrolling delle Ottave con #pragma unroll
-    - Calcoli Indipendenti: Calcola i contributi dei quattro angoli (influence_top_left, ecc.) in modo che non dipendano l'uno dall'altro, permettendo l'esecuzione out-of-order delle istruzioni aritmetiche.
+L’obiettivo è aumentare l’arithmetic intensity e spostare il punto del kernel verso l’alto-destra nel Roofline 
 
-- Eliminazione di floorf e fmaxf e --use_fast_math
+**Metriche da controllare (in generale)**
+- Arithmetic Intensity (FLOP/byte) Per vedere se il kernel si sta spostando verso destra nel Roofline.
+- Guardare roofline model
+
+### Ottimizzaioni possibili per migliorare la computazione e occupancy:
+
+**Massimizzare l'Occupancy e Gestione Registri**
+- Scomporre la struct Vector2D in variabili scalari (float x, y) riducendo il register pressure (da vedere con filippo, non so quanto convenga davvero)
+- Aumento del Block Size (da 16 a 32 x 32 o 16) (da testare sperimentalmente, di sicuro sopra i 16, non dobbiamo essere per forza rettangolari)
+- total_noise (noise totale calcolato da ogni ottava eseguita da un thread) da mantenere nei registri (che sono per definizione veloci) per tutte le ottave e scritto in memoria globale **una sola volta** alla fine per eliminare il collo di bottiglia del bandwidth di memoria per i calcoli intermedi. (vedi v3)
+
+    **Metriche da controllare**
+    - Registers per thread: alti == meno occupancy, meno latency hiding
+    - Active warps/SM: serve a tenere occupati gli SM mentre si nasconde la latenza.
+    - Register spilling: spill -> accessi DRAM -> kernel diventa memory bound
 
 
-- riflettere su memorie (pinned, costant...)
-    1. LUT: causa latenza perché viene consultata due volte per ogni ottava per trovare l'indice del gradiente.
+**Ottimizzare l'ILP**
+- spostare il ciclo delle ottave dentro il kernel
+- Loop Unrolling delle Ottave con `#pragma unroll` (biggest flex to fabio tosi.)
+- Calcola i contributi dei quattro angoli (influence_top_left, ecc.) in modo che non dipendano l'uno dall'altro, permettendo l'esecuzione out-of-order delle istruzioni aritmetiche. (da vedere con filippo come e se farlo)
+- Eliminazione di floorf e fmax (PESANTI) e --use_fast_math (da vedere)
+
+    **Metriche da controllare**
+    - Instructions per cycle (IPC): misura quanto bene lo scheduler riesce a sovrapporre istruzioni.
+    - Eligible warps per cycle: indica se l’SM ha abbastanza lavoro indipendente da eseguire.
+    - Stall reason: execution dependency. se è alto == poco ILP, dipendenze seriali (es. accumulatore scritto troppo spesso).
+
+### Ottimizzaioni possibili per migliorare USO DI MEMORIA
+
+Qui ho messo cose da valutare sperimentalmente insieme:
+
+-  LUT: causa latenza perché viene consultata due volte per ogni ottava per trovare l'indice del gradiente.
         
-        **Opzione A: Shared Memory (S-Mem)**, Caricamento collaborativo all'inizio del kernel.
-        Perché: La Shared Memory ha latenze bassissime e gestisce meglio gli accessi casuali dei thread nello stesso warp.
+    **Opzione A: Shared Memory (S-Mem)**, Caricamento collaborativo all'inizio del kernel.
+    Perché: La Shared Memory ha latenze bassissime e gestisce meglio gli accessi casuali dei thread nello stesso warp.
 
-        **Opzione B: Constant Memory (C-Mem)** Usare direttamente d_lookUpTable senza caricarla in S-Mem.
-        Perché: La C-Mem ha una cache dedicata. È ottima se molti thread leggono lo stesso valore (broadcast), ma se i thread leggono indici molto diversi (come nel rumore), può generare conflitti serializzati.
+    **Opzione B: Constant Memory (C-Mem)** Usare direttamente d_lookUpTable senza caricarla in S-Mem.
+    Perché: La C-Mem ha una cache dedicata. È ottima se molti thread leggono lo stesso valore (broadcast), ma se i thread leggono indici molto diversi (come nel rumore), può generare conflitti serializzati.
     
-    2. Gradients: Sono solo 8 vettori 2D.
+- Gradients: Sono solo 8 vettori 2D.
 
-        **Opzione A: Constant Memory (Standard)**  Idea: Lasciarli dove sono. 8 Vector2D occupano pochissimo spazio e rimangono quasi certamente nella cache L1/Constant.
+    **Opzione A: Constant Memory (Standard)**  Idea: Lasciarli dove sono. 8 Vector2D occupano pochissimo spazio e rimangono quasi certamente nella cache L1/Constant.
 
-        **Opzione B: Registri (Pre-caricamento)** Ogni thread carica gli 8 gradienti in variabili locali all'inizio.
+    **Opzione B: Registri (Pre-caricamento)** Ogni thread carica gli 8 gradienti in variabili locali all'inizio.
         Perché: Accesso a latenza zero assoluta.
 
-    3. Output / Accumulator
+- Output / Accumulator
 
-        **Opzione A: Fused Register Accumulation (Vincitore probabile)** Il ciclo delle ottave avviene dentro il kernel. Usi una variabile float total = 0 (registro). Scrivi in accumulator una sola volta alla fine.
-        Perché: Riduce il traffico sulla memoria globale di un fattore pari al numero di ottave (N).
+    **Opzione A: Fused Register Accumulation (Vincitore probabile)** Il ciclo delle ottave avviene dentro il kernel. Usi una variabile float total = 0 (registro). Scrivi in accumulator una sola volta alla fine.
+    Perché: Riduce il traffico sulla memoria globale di un fattore pari al numero di ottave (N).
 
+**Metriche da controllare**
+
+1. Accessi a memoria globale
+    - Global load/store transactions: da ridurli (es. accumulo in registro, scrittura finale unica).
+    - Bytes read/written per thread o per pixel: per verificare l’aumento di arithmetic intensity.
+    - Memory bandwidth (GB/s)
+
+2. Cache
+    - L1 cache hit / miss rate. miss elevati == pattern irregolare.
+    - L2 cache hit / miss rate. miss elevati == il working set è troppo grande o troppo disperso.
+
+3. Constant vs Shared
+- Constant memory hit: basso == accessi non broadcast, memoria **costante** non adatta.
+- Shared memory load efficiency / bank conflicts: conflitti annullano il vantaggio della **Shared-Mem**.
