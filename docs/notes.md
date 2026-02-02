@@ -162,3 +162,34 @@ Qui ho messo cose da valutare sperimentalmente insieme:
 3. Constant vs Shared
 - Constant memory hit: basso == accessi non broadcast, memoria **costante** non adatta.
 - Shared memory load efficiency / bank conflicts: conflitti annullano il vantaggio della **Shared-Mem**.
+
+---
+
+Idealmente, confifugrazione migliore:
+- accumulo per ottava: registri -> buffer finale: Global Memory
+- gradienti(8) -> memoria costante / registri
+- LookUpTable -> shared memory 
+caricare solo sottoinsiemi locali, snippet di codice:
+
+```
+__global__ void perlin_kernel(...)
+{
+    // Shared LUT (512 int)
+    __shared__ int s_perm[512];
+
+    // Linear thread index in the block
+    int tid = threadIdx.y * blockDim.x + threadIdx.x;
+    int block_threads = blockDim.x * blockDim.y;
+
+    // Cooperative load: each thread loads multiple elements
+    for (int i = tid; i < 512; i += block_threads) {
+        s_perm[i] = d_lookUpTable[i];
+    }
+
+    // Synchronize to ensure LUT is fully loaded
+    __syncthreads();
+
+    // ---- from here on, use s_perm instead of d_lookUpTable ----
+}
+```
+
