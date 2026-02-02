@@ -35,8 +35,7 @@
 #include <cuda_runtime.h>
 
 /* chunk variables */
-#define CHUNK_SIDE_LENGTH 32
-#define BLOCK_SIZE 16
+#define BLOCK_SIZE 32
 
 #include <cmath>
 
