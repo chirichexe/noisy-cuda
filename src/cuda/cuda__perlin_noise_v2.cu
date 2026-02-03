@@ -95,15 +95,17 @@ const Vector2D gradients[] = {
     {1,1}, {-1,1}, {1,-1}, {-1,-1}, {1,0}, {-1,0}, {0,1}, {0,-1}
 };
 
-
 /**
  * @brief CUDA kernel for Perlin noise generation, equivalent to Chunk
  */
 __global__ void perlin_noise_kernel(
     int width,
     int height,
-    float frequency,
-    float amplitude,
+    int octaves,
+    float base_frequency,
+    float base_amplitude,
+    float lacunarity,
+    float persistence,
     int offset_x,
     int offset_y,
     Vector2D* d_gradients, 
@@ -119,57 +121,76 @@ __global__ void perlin_noise_kernel(
     // - offset
     // - frequency scaling (aspect ratio to 1:1)
     float max_dimension = fmaxf((float)width, (float)height);
-    float noise_x = ((float)(x + offset_x) / max_dimension) * frequency;
-    float noise_y = ((float)(y + offset_y) / max_dimension) * frequency;
+    float frequency = base_frequency;
+    float amplitude = base_amplitude;
 
-    // Determine the integer coordinates of the cell
-    // (grid square) that contains this point
-    int cell_left = (int)floorf(noise_x);
-    int cell_top = (int)floorf(noise_y);
+    // Accumulate noise value over octaves
+    float total_value = 0.0f;
 
-    // Get the pixel local coordinates inside the chunk 
-    float local_x = noise_x - (float)cell_left;
-    float local_y = noise_y - (float)cell_top;
-
-    // Wrap cell coordinates to [0, 255] for indexing the permutation table
-    // The & 255 operation is equivalent to modulo 256 but faster
-    int xi = cell_left & 255;
-    int yi = cell_top  & 255;
-
-    // Use the permutation table to get pseudo-random gradient indices at the four corners of the cell
-    int grad_index_top_left     = d_lookUpTable[ d_lookUpTable[xi]     + yi] & 7;
-    int grad_index_top_right    = d_lookUpTable[ d_lookUpTable[xi + 1] + yi] & 7;
-    int grad_index_bottom_left  = d_lookUpTable[ d_lookUpTable[xi]     + yi + 1] & 7;
-    int grad_index_bottom_right = d_lookUpTable[ d_lookUpTable[xi + 1] + yi + 1] & 7;
-
-    // Select the gradient vectors corresponding to these indices
-    Vector2D grad_top_left     = d_gradients[grad_index_top_left];
-    Vector2D grad_top_right    = d_gradients[grad_index_top_right];
-    Vector2D grad_bottom_left  = d_gradients[grad_index_bottom_left];
-    Vector2D grad_bottom_right = d_gradients[grad_index_bottom_right];
-
-    // Compute vectors from each corner of the cell to the pixel's location
-    Vector2D dist_to_top_left     (local_x,        local_y);
-    Vector2D dist_to_top_right    (local_x - 1.0f, local_y);
-    Vector2D dist_to_bottom_left  (local_x,        local_y - 1.0f);
-    Vector2D dist_to_bottom_right (local_x - 1.0f, local_y - 1.0f);
-
-    // Calculate the dot product between distance vectors and gradient vectors
-    // This gives the influence (contribution) of each corner on the final noise value
-    float influence_top_left     = grad_top_left.dot(dist_to_top_left);
-    float influence_top_right    = grad_top_right.dot(dist_to_top_right);
-    float influence_bottom_left  = grad_bottom_left.dot(dist_to_bottom_left);
-    float influence_bottom_right = grad_bottom_right.dot(dist_to_bottom_right);
-
-    // Interpolate the influences along the x-axis using a fade function for smoothness
-    float interp_top    = lerp(influence_top_left, influence_top_right, fade(local_x));
-    float interp_bottom = lerp(influence_bottom_left, influence_bottom_right, fade(local_x));
+    //#pragma unroll
+    for (int o = 0; o < octaves; o++) {
+        
+        float noise_x = ((float)(x + offset_x) / max_dimension) * frequency;
+        float noise_y = ((float)(y + offset_y) / max_dimension) * frequency;
     
-    // Interpolate the top and bottom results along the y-axis to get the final Perlin noise value
-    float pixel_noise_value = lerp(interp_top, interp_bottom, fade(local_y));
+        // Determine the integer coordinates of the cell
+        // (grid square) that contains this point
+        float cell_left = floorf(noise_x);
+        float cell_top = floorf(noise_y);
+    
+        // Get the pixel local coordinates inside the chunk 
+        float local_x = noise_x - cell_left;
+        float local_y = noise_y - cell_top;
+    
+        // Wrap cell coordinates to [0, 255] for indexing the permutation table
+        // The & 255 operation is equivalent to modulo 256 but faster
+        int xi = (int)cell_left & 255;
+        int yi = (int)cell_top  & 255;
+    
+        // Use the permutation table to get pseudo-random gradient indices at the four corners of the cell
+        int grad_index_top_left     = d_lookUpTable[ d_lookUpTable[xi]     + yi] & 7;
+        int grad_index_top_right    = d_lookUpTable[ d_lookUpTable[xi + 1] + yi] & 7;
+        int grad_index_bottom_left  = d_lookUpTable[ d_lookUpTable[xi]     + yi + 1] & 7;
+        int grad_index_bottom_right = d_lookUpTable[ d_lookUpTable[xi + 1] + yi + 1] & 7;
+    
+        // Select the gradient vectors corresponding to these indices
+        Vector2D grad_top_left     = d_gradients[grad_index_top_left];
+        Vector2D grad_top_right    = d_gradients[grad_index_top_right];
+        Vector2D grad_bottom_left  = d_gradients[grad_index_bottom_left];
+        Vector2D grad_bottom_right = d_gradients[grad_index_bottom_right];
+    
+        // Compute vectors from each corner of the cell to the pixel's location
+        Vector2D dist_to_top_left     (local_x,        local_y);
+        Vector2D dist_to_top_right    (local_x - 1.0f, local_y);
+        Vector2D dist_to_bottom_left  (local_x,        local_y - 1.0f);
+        Vector2D dist_to_bottom_right (local_x - 1.0f, local_y - 1.0f);
+    
+        // Calculate the dot product between distance vectors and gradient vectors
+        // This gives the influence (contribution) of each corner on the final noise value
+        float influence_top_left     = grad_top_left.dot(dist_to_top_left);
+        float influence_top_right    = grad_top_right.dot(dist_to_top_right);
+        float influence_bottom_left  = grad_bottom_left.dot(dist_to_bottom_left);
+        float influence_bottom_right = grad_bottom_right.dot(dist_to_bottom_right);
+    
+        // Interpolate the influences along the x-axis using a fade function for smoothness
+        float interp_top    = lerp(influence_top_left, influence_top_right, fade(local_x));
+        float interp_bottom = lerp(influence_bottom_left, influence_bottom_right, fade(local_x));
+        
+        // Interpolate the top and bottom results along the y-axis to get the final Perlin noise value
+        float pixel_noise_value = lerp(interp_top, interp_bottom, fade(local_y));
+    
+        // Accumulate the noise value scaled by the current amplitude
+        total_value += pixel_noise_value * amplitude;
+
+        // controls frequency growth
+        frequency *= lacunarity;
+        // controls amplitude decay
+        amplitude *= persistence;
+
+    }
 
     // Accumulate the computed noise into the output array, scaling by the amplitude
-    d_accumulator[y * width + x] += pixel_noise_value * amplitude;
+    d_accumulator[y * width + x] = total_value;
 }
 
 void generate_perlin_noise(const Options& opts) {
@@ -181,7 +202,7 @@ void generate_perlin_noise(const Options& opts) {
     float base_frequency = opts.frequency;
     float base_amplitude = opts.amplitude;
     int octaves = opts.octaves;
-    int lacunarity = opts.lacunarity;
+    float lacunarity = opts.lacunarity;
     float persistence = opts.persistence;
     int offset_x = opts.offset_x;
     int offset_y = opts.offset_y;
@@ -222,10 +243,7 @@ void generate_perlin_noise(const Options& opts) {
         CHECK(cudaEventRecord(cuda_start));
     }
 
-    /* octave loop */
-    float frequency = base_frequency;
-    float amplitude = base_amplitude;
-
+    
     /* accumulator host (needed for octaves) */
     std::vector<float> accumulator(width * height, 0.0f);
     
@@ -245,7 +263,7 @@ void generate_perlin_noise(const Options& opts) {
     CHECK(cudaMemcpy(d_gradients, gradients, gradients_bytes, cudaMemcpyHostToDevice ));
     CHECK(cudaMemcpy(d_lookUpTable, lookUpTable.data(), lookUpTable_bytes, cudaMemcpyHostToDevice));
     CHECK(cudaMemcpy(d_accumulator, accumulator.data(), accumulator_bytes, cudaMemcpyHostToDevice));
-
+    
     // Configure kernel launch parameters
     dim3 blockSize(BLOCK_SIZE, BLOCK_SIZE);
     dim3 gridSize(
@@ -253,32 +271,27 @@ void generate_perlin_noise(const Options& opts) {
         (height + blockSize.y - 1) / blockSize.y
     );
     
-    for (int o = 0; o < octaves; o++) {
-
-        // generate noise for this octave
-        perlin_noise_kernel<<<gridSize, blockSize>>>(
-            width,
-            height,
-            frequency,
-            amplitude,
-            offset_x,
-            offset_y,
-            d_gradients, 
-            d_lookUpTable, 
-            d_accumulator
-        );
+    /* generate noise, the octave loop is inside */
+    perlin_noise_kernel<<<gridSize, blockSize>>>(
+        width,
+        height,
+        octaves,
+        base_frequency,
+        base_amplitude,
+        lacunarity,
+        persistence,
+        offset_x,
+        offset_y,
+        d_gradients, 
+        d_lookUpTable, 
+        d_accumulator
+    );
         
-        CHECK(cudaGetLastError());
-        CHECK(cudaDeviceSynchronize());
+    CHECK(cudaGetLastError());
+    CHECK(cudaDeviceSynchronize());
 
-        // Copy result back to host
-        CHECK(cudaMemcpy(accumulator.data(), d_accumulator, accumulator_bytes, cudaMemcpyDeviceToHost));
-
-        // controls frequency growth
-        frequency *= lacunarity;
-        // controls amplitude decay
-        amplitude *= persistence;
-    }
+    // Copy result back to host
+    CHECK(cudaMemcpy(accumulator.data(), d_accumulator, accumulator_bytes, cudaMemcpyDeviceToHost));
 
     /* stop profiling timers and report */
     if (benchmark) {

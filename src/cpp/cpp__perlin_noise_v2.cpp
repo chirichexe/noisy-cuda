@@ -193,7 +193,7 @@ void generate_perlin_noise(const Options& opts) {
     float base_frequency = opts.frequency;
     float base_amplitude = opts.amplitude;
     int octaves = opts.octaves;
-    int lacunarity = opts.lacunarity;
+    float lacunarity = opts.lacunarity;
     float persistence = opts.persistence;
     int offset_x = opts.offset_x;
     int offset_y = opts.offset_y;

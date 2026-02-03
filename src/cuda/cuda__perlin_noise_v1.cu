@@ -124,17 +124,17 @@ __global__ void perlin_noise_kernel(
 
     // Determine the integer coordinates of the cell
     // (grid square) that contains this point
-    int cell_left = (int)floorf(noise_x);
-    int cell_top = (int)floorf(noise_y);
+    float cell_left = floorf(noise_x);
+    float cell_top = floorf(noise_y);
 
     // Get the pixel local coordinates inside the chunk 
-    float local_x = noise_x - (float)cell_left;
-    float local_y = noise_y - (float)cell_top;
+    float local_x = noise_x - cell_left;
+    float local_y = noise_y - cell_top;
 
     // Wrap cell coordinates to [0, 255] for indexing the permutation table
     // The & 255 operation is equivalent to modulo 256 but faster
-    int xi = cell_left & 255;
-    int yi = cell_top  & 255;
+    int xi = (int)cell_left & 255;
+    int yi = (int)cell_top  & 255;
 
     // Use the permutation table to get pseudo-random gradient indices at the four corners of the cell
     int grad_index_top_left     = d_lookUpTable[ d_lookUpTable[xi]     + yi] & 7;
@@ -181,7 +181,7 @@ void generate_perlin_noise(const Options& opts) {
     float base_frequency = opts.frequency;
     float base_amplitude = opts.amplitude;
     int octaves = opts.octaves;
-    int lacunarity = opts.lacunarity;
+    float lacunarity = opts.lacunarity;
     float persistence = opts.persistence;
     int offset_x = opts.offset_x;
     int offset_y = opts.offset_y;

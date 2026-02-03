@@ -118,7 +118,7 @@ L’obiettivo è aumentare l’arithmetic intensity e spostare il punto del kern
 
 **Ottimizzare l'ILP**
 - spostare il ciclo delle ottave dentro il kernel
-- Loop Unrolling delle Ottave con `#pragma unroll` (biggest flex to fabio tosi.)
+- Loop Unrolling delle Ottave con `#pragma unroll` 
 - Calcola i contributi dei quattro angoli (influence_top_left, ecc.) in modo che non dipendano l'uno dall'altro, permettendo l'esecuzione out-of-order delle istruzioni aritmetiche. (da vedere con filippo come e se farlo)
 - Eliminazione di floorf e fmax (PESANTI) e --use_fast_math (da vedere)
 
