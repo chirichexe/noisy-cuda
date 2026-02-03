@@ -124,8 +124,8 @@ __global__ void perlin_noise_kernel(
         float noise_x = ((float)(x + offset_x) / max_dimension) * frequency;
         float noise_y = ((float)(y + offset_y) / max_dimension) * frequency;
     
-        float cell_left = (int)noise_x;
-        float cell_top = (int)noise_y;
+        float cell_left = floorf(noise_x);
+        float cell_top = floorf(noise_y);
     
         float local_x = noise_x - cell_left;
         float local_y = noise_y - cell_top;
