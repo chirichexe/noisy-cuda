@@ -200,3 +200,11 @@ __global__ void perlin_kernel(...)
 # SIMD
 
 considerazione sui tipi di dato
+
+
+
+
+# note al volo
+- mettere #pragma etc specificando numero ottave
+- carveout per smem, la definiamo shared?
+
