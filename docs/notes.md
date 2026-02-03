@@ -86,7 +86,10 @@ Generating Perlin noise with options:
     - `accumulator`: memoria globale (R - W)
 
 
-cosa notiamo? memory bound
+cosa notiamo?
+- Occupancy ok
+- lanciamo un kernel pper ogni ottava
+- siamo memory bound (mettiamo tutto in memoria globale)
 
 ## Versione 2:
 
@@ -194,3 +197,6 @@ __global__ void perlin_kernel(...)
 }
 ```
 
+# SIMD
+
+considerazione sui tipi di dato

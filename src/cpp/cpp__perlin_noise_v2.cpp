@@ -1,5 +1,5 @@
 /*
- * cpp__perlin_noise_v2.cpp - perlin noise: C++ implementation (optimized)
+ * cpp__perlin_noise_v2.cpp - perlin noise: C++ implementation optimized
  *
  */
 
