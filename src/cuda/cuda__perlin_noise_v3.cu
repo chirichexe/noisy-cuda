@@ -1,6 +1,24 @@
 /*
- * cuda__perlin_noise_v3.cu - perlin noise: CUDA fused + memory optimized
+ * cuda__perlin_noise_v3.cu - shared memory for lookup table
+ *
  */
+
+/*
+ * Copyright 2025 Davide Chirichella, Filippo Giulietti
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * Distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 
 #include "perlin_noise.hpp"
 #include "utils_global.hpp"
@@ -15,16 +33,39 @@
 #include <ctime>
 #include <iostream>
 #include <fstream>
-#include <random> // Per std::shuffle
 #include <cuda_runtime.h>
+#include <cmath>
 
-/* chunk variables */
-#define CHUNK_SIDE_LENGTH 32
+
+/* chunk variables, CUDA adapted */
 #define BLOCK_SIZE 16
 
 /**
+ * @brief  Smoothing function for Perlin noise on CUDA device
+ * 
+ * @param t 
+ * @return float
+ */
+__device__ float fade(float t) {
+    return t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
+}
+
+/**
+ * @brief Linear interpolation function on CUDA device
+ * 
+ * @param a 
+ * @param b 
+ * @param t 
+ * @return float
+ */
+__device__ float lerp(float a, float b, float t) {
+    return a + t * (b - a);
+}
+
+/**
  * @brief Simple 2D vector structure
- * */
+ * 
+ */
 struct Vector2D {
     float x = 0.0f;
     float y = 0.0f;
@@ -32,10 +73,6 @@ struct Vector2D {
     Vector2D() = default;
 
     __host__ __device__ Vector2D(float x_, float y_) : x(x_), y(y_) {}
-
-    __host__ __device__ Vector2D operator-(const Vector2D& other) const {
-        return {x - other.x, y - other.y};
-    }
 
     __host__ __device__ float dot(const Vector2D& other) const {
         return x * other.x + y * other.y;
@@ -51,24 +88,22 @@ struct Vector2D {
     }
 };
 
-// Constant memory for lookup table and gradients
-__constant__ int d_lookUpTable[512];
+
+// Declaring the global gradients' vectors
+const Vector2D gradients[] = {
+    {1,1}, {-1,1}, {1,-1}, {-1,-1}, {1,0}, {-1,0}, {0,1}, {0,-1}
+};
+
+// Declaring the permutation table (look-up table) and gradients as constant memory on the device
 __constant__ Vector2D d_gradients[8];
 
-__device__ __forceinline__ float fade(float t) {
-    // Regola di Horner: riduce il numero di moltiplicazioni
-    return t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
-}
+__constant__ int d_lookUpTable[512];
 
-__device__ __forceinline__ float lerp(float a, float b, float t) {
-    return a + t * (b - a);
-}
 
 /**
- * @brief CUDA kernel con Kernel Fusion e Shared Memory
+ * @brief CUDA kernel for Perlin noise generation, equivalent to Chunk
  */
-__global__ void perlin_noise_fused_kernel(
-    float* output,
+__global__ void perlin_noise_kernel(
     int width,
     int height,
     int octaves,
@@ -77,119 +112,145 @@ __global__ void perlin_noise_fused_kernel(
     float lacunarity,
     float persistence,
     int offset_x,
-    int offset_y
+    int offset_y,
+    float* d_accumulator
 ) {
-    // 1. Caricamento collaborativo in Shared Memory (come prima)
-    __shared__ int s_lookUpTable[512];
-    int tid = threadIdx.y * blockDim.x + threadIdx.x;
-    int threads_per_block = blockDim.x * blockDim.y;
-
-    for (int i = tid; i < 512; i += threads_per_block) {
-        s_lookUpTable[i] = d_lookUpTable[i];
-    }
-    __syncthreads();
-
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
+    
+    /* loading shared memory for lookup table */
+    // allocate shared memory
+    __shared__ int shared_lookUpTable[512];
+    
+    int tid = threadIdx.y * blockDim.x + threadIdx.x;
+    
+    // having 16 x 16 = 256 threads per block,
+    // each thread have to loads 2 elements of the lookup table
+    int threads_per_block = blockDim.x * blockDim.y;
+    for (int i = tid; i < 512; i += threads_per_block) {
+        shared_lookUpTable[i] = d_lookUpTable[i];
+    }
 
+    // wait until all copies are done
+    __syncthreads();
+
+
+    // Boundary check
+    // we check this after loading shared memory to maximize parallelism
     if (x >= width || y >= height) return;
 
+    // Get the pixel global coordinates with:
+    // - offset
+    // - frequency scaling (aspect ratio to 1:1)
     float max_dimension = fmaxf((float)width, (float)height);
-    
-    // Variabili per l'accumulo locale (registri)
-    float total_noise = 0.0f;
     float frequency = base_frequency;
     float amplitude = base_amplitude;
 
-    // 2. CICLO OTTAVE SPOSTATO DENTRO IL KERNEL
+    // Accumulate noise value over octaves
+    float total_value = 0.0f;
+
     #pragma unroll
     for (int o = 0; o < octaves; o++) {
+        
         float noise_x = ((float)(x + offset_x) / max_dimension) * frequency;
         float noise_y = ((float)(y + offset_y) / max_dimension) * frequency;
-
-        int cell_left = __float2int_rd(noise_x);
-        int cell_top  = __float2int_rd(noise_y);
-
-        float local_x = noise_x - (float)cell_left;
-        float local_y = noise_y - (float)cell_top;
-
-        int xi = cell_left & 255;
-        int yi = cell_top  & 255;
-
-        // Lookup degli indici dei gradienti (utilizzando Shared Memory)
-        int i1 = s_lookUpTable[xi];
-        int i2 = s_lookUpTable[xi + 1];
-
-        int gi00 = s_lookUpTable[i1 + yi] & 7;
-        int gi01 = s_lookUpTable[i1 + yi + 1] & 7;
-        int gi10 = s_lookUpTable[i2 + yi] & 7;
-        int gi11 = s_lookUpTable[i2 + yi + 1] & 7;
-
-        // Calcolo influenze (utilizzando d_gradients in memoria costante)
-        float dot00 = d_gradients[gi00].x * local_x + d_gradients[gi00].y * local_y;
-        float dot10 = d_gradients[gi10].x * (local_x - 1.0f) + d_gradients[gi10].y * local_y;
-        float dot01 = d_gradients[gi01].x * local_x + d_gradients[gi01].y * (local_y - 1.0f);
-        float dot11 = d_gradients[gi11].x * (local_x - 1.0f) + d_gradients[gi11].y * (local_y - 1.0f);
-
-        float u = fade(local_x);
-        float v = fade(local_y);
-
-        float interp_x1 = lerp(dot00, dot10, u);
-        float interp_x2 = lerp(dot01, dot11, u);
+    
+        // Determine the integer coordinates of the cell
+        // (grid square) that contains this point
+        float cell_left = floorf(noise_x);
+        float cell_top = floorf(noise_y);
+    
+        // Get the pixel local coordinates inside the chunk 
+        float local_x = noise_x - cell_left;
+        float local_y = noise_y - cell_top;
+    
+        // Wrap cell coordinates to [0, 255] for indexing the permutation table
+        // The & 255 operation is equivalent to modulo 256 but faster
+        int xi = (int)cell_left & 255;
+        int yi = (int)cell_top  & 255;
+    
+        // Use the permutation table to get pseudo-random gradient indices at the four corners of the cell
+        int grad_index_top_left     = shared_lookUpTable[ shared_lookUpTable[xi]     + yi] & 7;
+        int grad_index_top_right    = shared_lookUpTable[ shared_lookUpTable[xi + 1] + yi] & 7;
+        int grad_index_bottom_left  = shared_lookUpTable[ shared_lookUpTable[xi]     + yi + 1] & 7;
+        int grad_index_bottom_right = shared_lookUpTable[ shared_lookUpTable[xi + 1] + yi + 1] & 7;
+    
+        // Select the gradient vectors corresponding to these indices
+        Vector2D grad_top_left     = d_gradients[grad_index_top_left];
+        Vector2D grad_top_right    = d_gradients[grad_index_top_right];
+        Vector2D grad_bottom_left  = d_gradients[grad_index_bottom_left];
+        Vector2D grad_bottom_right = d_gradients[grad_index_bottom_right];
+    
+        // Compute vectors from each corner of the cell to the pixel's location
+        Vector2D dist_to_top_left     (local_x,        local_y);
+        Vector2D dist_to_top_right    (local_x - 1.0f, local_y);
+        Vector2D dist_to_bottom_left  (local_x,        local_y - 1.0f);
+        Vector2D dist_to_bottom_right (local_x - 1.0f, local_y - 1.0f);
+    
+        // Calculate the dot product between distance vectors and gradient vectors
+        // This gives the influence (contribution) of each corner on the final noise value
+        float influence_top_left     = grad_top_left.dot(dist_to_top_left);
+        float influence_top_right    = grad_top_right.dot(dist_to_top_right);
+        float influence_bottom_left  = grad_bottom_left.dot(dist_to_bottom_left);
+        float influence_bottom_right = grad_bottom_right.dot(dist_to_bottom_right);
+    
+        // Interpolate the influences along the x-axis using a fade function for smoothness
+        float interp_top    = lerp(influence_top_left, influence_top_right, fade(local_x));
+        float interp_bottom = lerp(influence_bottom_left, influence_bottom_right, fade(local_x));
         
-        // Accumulo il rumore dell'ottava corrente
-        total_noise += lerp(interp_x1, interp_x2, v) * amplitude;
+        // Interpolate the top and bottom results along the y-axis to get the final Perlin noise value
+        float pixel_noise_value = lerp(interp_top, interp_bottom, fade(local_y));
+    
+        // Accumulate the noise value scaled by the current amplitude
+        total_value += pixel_noise_value * amplitude;
 
-        // Aggiornamento parametri per la prossima ottava
+        // controls frequency growth
         frequency *= lacunarity;
+        // controls amplitude decay
         amplitude *= persistence;
+
     }
 
-    // 3. SCRITTURA UNICA nella memoria globale
-    output[y * width + x] = total_noise;
+    // Accumulate the computed noise into the output array, scaling by the amplitude
+    d_accumulator[y * width + x] = total_value;
 }
 
 void generate_perlin_noise(const Options& opts) {
     /* initialize parameters */
+    // noise parameters
     std::uint64_t seed = opts.seed;
     int width = opts.width;
     int height = opts.height;
     float base_frequency = opts.frequency;
     float base_amplitude = opts.amplitude;
     int octaves = opts.octaves;
-    int lacunarity = opts.lacunarity;
+    float lacunarity = opts.lacunarity;
     float persistence = opts.persistence;
     int offset_x = opts.offset_x;
     int offset_y = opts.offset_y;
     bool no_outputs = opts.no_outputs;
-    bool verbose = opts.verbose;
+    //bool verbose = opts.verbose;
     bool benchmark = opts.benchmark;
 
+    // output info
     std::string output_filename = opts.output_filename;
     std::string output_format = opts.format;
 
-    // Build permutation table using Pinned Memory for faster transfer
-    int* h_lookUpTable;
-    CHECK(cudaMallocHost(&h_lookUpTable, 512 * sizeof(int)));
-    
-    std::vector<int> p(256);
-    for (int i = 0; i < 256; i++) p[i] = i;
-    std::mt19937 g(static_cast<unsigned int>(seed));
-    std::shuffle(p.begin(), p.end(), g);
+    /* randomize from seed */
+    srand(seed);
 
-    for (int i = 0; i < 256; i++) {
-        h_lookUpTable[i] = p[i];
-        h_lookUpTable[256 + i] = p[i];
+    // build the permutation tables
+    std::vector<int> lookUpTable(512);
+    for (int i = 0; i < 256; i++) lookUpTable[i] = i;
+
+    // shuffling the table with Fisher-Yates approach
+    for (int i = 255; i > 0; i--) {
+        int j = rand() % (i + 1);
+        std::swap(lookUpTable[i], lookUpTable[j]);
     }
 
-    // Define gradients
-    const Vector2D gradients[] = {
-        {1,1}, {-1,1}, {1,-1}, {-1,-1}, {1,0}, {-1,0}, {0,1}, {0,-1}
-    };
-
-    // Copy lookup table and gradients to constant memory
-    CHECK(cudaMemcpyToSymbol(d_lookUpTable, h_lookUpTable, 512 * sizeof(int)));
-    CHECK(cudaMemcpyToSymbol(d_gradients, gradients, 8 * sizeof(Vector2D)));
+    // avoid overflows doubling the table
+    for (int i = 0; i < 256; i++) lookUpTable[256 + i] = lookUpTable[i];
 
     /* start profiling timers */
     std::chrono::high_resolution_clock::time_point wall_start;
@@ -201,56 +262,58 @@ void generate_perlin_noise(const Options& opts) {
         cpu_start = std::clock();
         CHECK(cudaEventCreate(&cuda_start));
         CHECK(cudaEventCreate(&cuda_stop));
-    }
-
-    // Allocate device memory
-    float* d_accumulator;
-    size_t accumulator_size = width * height * sizeof(float);
-    CHECK(cudaMalloc(&d_accumulator, accumulator_size));
-    CHECK(cudaMemset(d_accumulator, 0, accumulator_size));
-
-    // Prefer Shared Memory over L1 cache for LUT access
-    CHECK(cudaFuncSetAttribute(perlin_noise_fused_kernel, 
-                               cudaFuncAttributePreferredSharedMemoryCarveout, 
-                               cudaSharedmemCarveoutMaxShared));
-
-    // Configure kernel launch parameters
-    dim3 blockSize(BLOCK_SIZE, BLOCK_SIZE);
-    dim3 gridSize((width + blockSize.x - 1) / blockSize.x,
-                  (height + blockSize.y - 1) / blockSize.y);
-
-    if (benchmark) {
         CHECK(cudaEventRecord(cuda_start));
     }
 
-    // Un'unica chiamata al kernel per tutte le ottave (Fused)
-    perlin_noise_fused_kernel<<<gridSize, blockSize>>>(
-        d_accumulator,
+    
+    /* accumulator host (needed for octaves) */
+    std::vector<float> accumulator(width * height, 0.0f);
+    
+    /* copy lookup table, gradients and accumulator to device */
+    float* d_accumulator;
+    
+    size_t gradients_bytes = 8 * sizeof(Vector2D);
+    size_t lookUpTable_bytes = 512 * sizeof(int);
+    size_t accumulator_bytes = width * height * sizeof(float);
+
+    CHECK(cudaMalloc(&d_accumulator, accumulator_bytes ));
+    CHECK(cudaMemcpy(d_accumulator, accumulator.data(), accumulator_bytes, cudaMemcpyHostToDevice));
+    
+    CHECK(cudaMemcpyToSymbol(d_gradients, gradients, gradients_bytes));
+    CHECK(cudaMemcpyToSymbol(d_lookUpTable, lookUpTable.data(), lookUpTable_bytes));
+    
+    // Configure kernel launch parameters
+    dim3 blockSize(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 gridSize(
+        (width + blockSize.x - 1) / blockSize.x,
+        (height + blockSize.y - 1) / blockSize.y
+    );
+    
+    /* generate noise, the octave loop is inside */
+    perlin_noise_kernel<<<gridSize, blockSize>>>(
         width,
         height,
         octaves,
         base_frequency,
         base_amplitude,
-        (float)lacunarity,
+        lacunarity,
         persistence,
         offset_x,
-        offset_y
+        offset_y,
+        d_accumulator
     );
+        
     CHECK(cudaGetLastError());
-
-    if (benchmark) {
-        CHECK(cudaEventRecord(cuda_stop));
-        CHECK(cudaEventSynchronize(cuda_stop));
-    }
-
     CHECK(cudaDeviceSynchronize());
 
     // Copy result back to host
-    std::vector<float> accumulator(width * height);
-    CHECK(cudaMemcpy(accumulator.data(), d_accumulator, accumulator_size, cudaMemcpyDeviceToHost));
+    CHECK(cudaMemcpy(accumulator.data(), d_accumulator, accumulator_bytes, cudaMemcpyDeviceToHost));
 
     /* stop profiling timers and report */
     if (benchmark) {
+        CHECK(cudaEventRecord(cuda_stop));
+        CHECK(cudaEventSynchronize(cuda_stop));
+
         clock_t cpu_end = std::clock();
         auto wall_end = std::chrono::high_resolution_clock::now();
 
@@ -264,7 +327,10 @@ void generate_perlin_noise(const Options& opts) {
         size_t num_pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
         double ms_per_pixel = (num_pixels > 0) ? (wall_ms / (double)num_pixels) : 0.0;
 
+        size_t estimated_total_alloc = accumulator_bytes;
+
         std::time_t now = std::time(nullptr);
+        //std::cout << "timestamp,width,height,pixels,octaves,frequency,wall_ms,cpu_s,ms_per_pixel,mem_bytes\n";
         std::cout << now << ","
                   << width << ","
                   << height << ","
@@ -274,17 +340,20 @@ void generate_perlin_noise(const Options& opts) {
                   << wall_ms << ","
                   << cpu_seconds << ","
                   << ms_per_pixel << ","
-                  << accumulator_size << std::endl;
+                  << estimated_total_alloc << std::endl;
 
         CHECK(cudaEventDestroy(cuda_start));
         CHECK(cudaEventDestroy(cuda_stop));
     }
 
     /* save the generated noise image */
-    if (!no_outputs) {
+    if (!no_outputs){
+
+        // create the output array
         std::vector<uint8_t> output(width * height, 0);
         for (int i = 0; i < width * height; i++) {
-            float v = std::clamp(accumulator[i], -1.0f, 1.0f);
+            // mapping the accumulator (-1, 1) to grayscaled pixels (0-255)
+            float v = std::clamp( accumulator[i] , -1.0f, 1.0f);
             output[i] = static_cast<uint8_t>((v + 1.0f) * 0.5f * 255.0f);
         }
 
@@ -292,7 +361,7 @@ void generate_perlin_noise(const Options& opts) {
             output,
             width,
             height,
-            1,
+            1, // only 1 channel, b&w
             output_filename,
             output_format
         );
@@ -300,5 +369,4 @@ void generate_perlin_noise(const Options& opts) {
 
     // Cleanup
     CHECK(cudaFree(d_accumulator));
-    CHECK(cudaFreeHost(h_lookUpTable)); // Free pinned memory
 }

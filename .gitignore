@@ -6,7 +6,7 @@ noisy_cuda
 build*
 
 # outputs
-*.png
+#*.png
 *.ppm
 *.csv
 *.raw

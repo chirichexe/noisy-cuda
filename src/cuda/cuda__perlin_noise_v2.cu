@@ -1,5 +1,5 @@
 /*
- * cuda__perlin_noise_v2.cu - perlin noise: fixing memory bound
+ * cuda__perlin_noise_v2.cu - octave loops inside the kernel and using constant memory
  *
  */
 
@@ -39,7 +39,6 @@
 
 /* chunk variables, CUDA adapted */
 #define BLOCK_SIZE 16
-
 
 /**
  * @brief  Smoothing function for Perlin noise on CUDA device
@@ -95,6 +94,12 @@ const Vector2D gradients[] = {
     {1,1}, {-1,1}, {1,-1}, {-1,-1}, {1,0}, {-1,0}, {0,1}, {0,-1}
 };
 
+// Declaring the permutation table (look-up table) and gradients as constant memory on the device
+__constant__ Vector2D d_gradients[8];
+
+__constant__ int d_lookUpTable[512];
+
+
 /**
  * @brief CUDA kernel for Perlin noise generation, equivalent to Chunk
  */
@@ -108,8 +113,6 @@ __global__ void perlin_noise_kernel(
     float persistence,
     int offset_x,
     int offset_y,
-    Vector2D* d_gradients, 
-    int* d_lookUpTable, 
     float* d_accumulator
 ) {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -248,21 +251,17 @@ void generate_perlin_noise(const Options& opts) {
     std::vector<float> accumulator(width * height, 0.0f);
     
     /* copy lookup table, gradients and accumulator to device */
-    Vector2D* d_gradients;
-    int* d_lookUpTable;
     float* d_accumulator;
     
     size_t gradients_bytes = 8 * sizeof(Vector2D);
     size_t lookUpTable_bytes = 512 * sizeof(int);
     size_t accumulator_bytes = width * height * sizeof(float);
-    
-    CHECK(cudaMalloc(&d_gradients, gradients_bytes));
-    CHECK(cudaMalloc(&d_lookUpTable, lookUpTable_bytes));
+
     CHECK(cudaMalloc(&d_accumulator, accumulator_bytes ));
-    
-    CHECK(cudaMemcpy(d_gradients, gradients, gradients_bytes, cudaMemcpyHostToDevice ));
-    CHECK(cudaMemcpy(d_lookUpTable, lookUpTable.data(), lookUpTable_bytes, cudaMemcpyHostToDevice));
     CHECK(cudaMemcpy(d_accumulator, accumulator.data(), accumulator_bytes, cudaMemcpyHostToDevice));
+    
+    CHECK(cudaMemcpyToSymbol(d_gradients, gradients, gradients_bytes));
+    CHECK(cudaMemcpyToSymbol(d_lookUpTable, lookUpTable.data(), lookUpTable_bytes));
     
     // Configure kernel launch parameters
     dim3 blockSize(BLOCK_SIZE, BLOCK_SIZE);
@@ -282,8 +281,6 @@ void generate_perlin_noise(const Options& opts) {
         persistence,
         offset_x,
         offset_y,
-        d_gradients, 
-        d_lookUpTable, 
         d_accumulator
     );
         
@@ -353,6 +350,4 @@ void generate_perlin_noise(const Options& opts) {
 
     // Cleanup
     CHECK(cudaFree(d_accumulator));
-    CHECK(cudaFree(d_lookUpTable));
-    CHECK(cudaFree(d_gradients));
 }

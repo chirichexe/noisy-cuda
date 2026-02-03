@@ -83,7 +83,6 @@ def main():
             fontweight="bold"
         )
 
-    ax.set_xlabel("Resolution")
     ax.set_ylabel("GPU Time (ms)")
     ax.set_title("GPU Performance vs Resolution (Grouped by Octaves)", fontweight="bold")
 
