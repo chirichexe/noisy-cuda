@@ -146,8 +146,7 @@ __global__ void perlin_noise_fused_kernel(
     }
 
     // 3. SCRITTURA UNICA nella memoria globale
-    int idx = y * width + x;
-    output[idx] = total_noise;
+    output[y * width + x] = total_noise;
 }
 
 void generate_perlin_noise(const Options& opts) {

@@ -170,6 +170,7 @@ Idealmente, confifugrazione migliore:
 - gradienti(8) -> memoria costante / registri
 - LookUpTable -> shared memory 
 caricare solo sottoinsiemi locali, snippet di codice:
+- bonus finale: memoria pinned (da guardare)
 
 ```
 __global__ void perlin_kernel(...)

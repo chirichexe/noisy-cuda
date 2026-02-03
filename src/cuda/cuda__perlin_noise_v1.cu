@@ -37,9 +37,31 @@
 #include <cmath>
 
 
-/* chunk variables */
+/* chunk variables, CUDA adapted */
 #define BLOCK_SIZE 16
 
+
+/**
+ * @brief  Smoothing function for Perlin noise on CUDA device
+ * 
+ * @param t 
+ * @return float
+ */
+__device__ float fade(float t) {
+    return t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
+}
+
+/**
+ * @brief Linear interpolation function on CUDA device
+ * 
+ * @param a 
+ * @param b 
+ * @param t 
+ * @return float
+ */
+__device__ float lerp(float a, float b, float t) {
+    return a + t * (b - a);
+}
 
 /**
  * @brief Simple 2D vector structure
@@ -52,10 +74,6 @@ struct Vector2D {
     Vector2D() = default;
 
     __host__ __device__ Vector2D(float x_, float y_) : x(x_), y(y_) {}
-
-    __host__ __device__ Vector2D operator-(const Vector2D& other) const {
-        return {x - other.x, y - other.y};
-    }
 
     __host__ __device__ float dot(const Vector2D& other) const {
         return x * other.x + y * other.y;
@@ -71,48 +89,26 @@ struct Vector2D {
     }
 };
 
-/**
- * @brief Fade function for smooth interpolation on CUDA device
- * 
- * @param t 
- * @return __device__ 
- */
-__device__ float fade(float t) {
-    return t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
-}
-
-/**
- * @brief Linear interpolation function for CUDA device
- * 
- * @param a 
- * @param b 
- * @param t 
- * @return __device__ 
- */
-__device__ float lerp(float a, float b, float t) {
-    return a + t * (b - a);
-}
-
-// Constant memory for lookup table and gradients
-__constant__ int d_lookUpTable[512];
-__constant__ Vector2D d_gradients[8];
 
 // Declaring the global gradients' vectors
 const Vector2D gradients[] = {
     {1,1}, {-1,1}, {1,-1}, {-1,-1}, {1,0}, {-1,0}, {0,1}, {0,-1}
 };
 
+
 /**
- * @brief CUDA kernel for Perlin noise generation
+ * @brief CUDA kernel for Perlin noise generation, equivalent to Chunk
  */
 __global__ void perlin_noise_kernel(
-    float* accumulator,
     int width,
     int height,
     float frequency,
     float amplitude,
     int offset_x,
-    int offset_y
+    int offset_y,
+    Vector2D* d_gradients, 
+    int* d_lookUpTable, 
+    float* d_accumulator
 ) {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -173,8 +169,7 @@ __global__ void perlin_noise_kernel(
     float pixel_noise_value = lerp(interp_top, interp_bottom, fade(local_y));
 
     // Accumulate the computed noise into the output array, scaling by the amplitude
-    int idx = y * width + x;
-    accumulator[idx] += pixel_noise_value * amplitude;
+    d_accumulator[y * width + x] += pixel_noise_value * amplitude;
 }
 
 void generate_perlin_noise(const Options& opts) {
@@ -227,17 +222,29 @@ void generate_perlin_noise(const Options& opts) {
         CHECK(cudaEventRecord(cuda_start));
     }
 
-    // Copy lookup table and gradients to constant memory
-    CHECK(cudaMemcpyToSymbol(d_lookUpTable, lookUpTable.data(), 512 * sizeof(int)));
-    CHECK(cudaMemcpyToSymbol(d_gradients, gradients, 8 * sizeof(Vector2D)));
+    /* octave loop */
+    float frequency = base_frequency;
+    float amplitude = base_amplitude;
 
-    /* float accumulation accumulator (needed for octaves) */
+    /* accumulator host (needed for octaves) */
     std::vector<float> accumulator(width * height, 0.0f);
-
-    // Allocate device memory
+    
+    /* copy lookup table, gradients and accumulator to device */
+    Vector2D* d_gradients;
+    int* d_lookUpTable;
     float* d_accumulator;
-    size_t accumulator_bytes = accumulator.size() * sizeof(float);
-    CHECK(cudaMalloc(&d_accumulator, accumulator_bytes));
+    
+    size_t gradients_bytes = 8 * sizeof(Vector2D);
+    size_t lookUpTable_bytes = 512 * sizeof(int);
+    size_t accumulator_bytes = width * height * sizeof(float);
+    
+    CHECK(cudaMalloc(&d_gradients, gradients_bytes));
+    CHECK(cudaMalloc(&d_lookUpTable, lookUpTable_bytes));
+    CHECK(cudaMalloc(&d_accumulator, accumulator_bytes ));
+    
+    CHECK(cudaMemcpy(d_gradients, gradients, gradients_bytes, cudaMemcpyHostToDevice ));
+    CHECK(cudaMemcpy(d_lookUpTable, lookUpTable.data(), lookUpTable_bytes, cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpy(d_accumulator, accumulator.data(), accumulator_bytes, cudaMemcpyHostToDevice));
 
     // Configure kernel launch parameters
     dim3 blockSize(BLOCK_SIZE, BLOCK_SIZE);
@@ -245,26 +252,20 @@ void generate_perlin_noise(const Options& opts) {
         (width + blockSize.x - 1) / blockSize.x,
         (height + blockSize.y - 1) / blockSize.y
     );
-
-    /* octave loop */
-    float frequency = base_frequency;
-    float amplitude = base_amplitude;
-
-    // Copy accumulator to device
-    CHECK(cudaMemcpy(d_accumulator, accumulator.data(), accumulator_bytes, cudaMemcpyHostToDevice));
     
     for (int o = 0; o < octaves; o++) {
-        
 
-        // generate noise for this octave using the existing chunk pipeline
+        // generate noise for this octave
         perlin_noise_kernel<<<gridSize, blockSize>>>(
-            d_accumulator,
             width,
             height,
             frequency,
             amplitude,
             offset_x,
-            offset_y
+            offset_y,
+            d_gradients, 
+            d_lookUpTable, 
+            d_accumulator
         );
         
         CHECK(cudaGetLastError());
@@ -339,4 +340,6 @@ void generate_perlin_noise(const Options& opts) {
 
     // Cleanup
     CHECK(cudaFree(d_accumulator));
+    CHECK(cudaFree(d_lookUpTable));
+    CHECK(cudaFree(d_gradients));
 }

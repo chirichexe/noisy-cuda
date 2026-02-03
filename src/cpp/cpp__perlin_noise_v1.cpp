@@ -1,5 +1,5 @@
 /*
- * cpp__perlin_noise_v1.cpp - perlin noise: C++ implementation
+ * cpp__perlin_noise_v1.cpp - perlin noise: C++ first implementation
  *
  */
 
@@ -55,8 +55,6 @@ static float lerp(float a, float b, float t) {
     return a + t * (b - a);
 }
 
-
-
 /**
  * @brief Simple 2D vector structure
  * 
@@ -68,10 +66,6 @@ struct Vector2D {
     Vector2D() = default;
 
     Vector2D(float x_, float y_) : x(x_), y(y_) {}
-
-    Vector2D operator-(const Vector2D& other) const {
-        return {x - other.x, y - other.y};
-    }
 
     float dot(const Vector2D& other) const {
         return x * other.x + y * other.y;

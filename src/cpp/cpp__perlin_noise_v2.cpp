@@ -1,5 +1,5 @@
 /*
- * cpp__perlin_noise_v2.cpp - perlin noise: C++ implementation
+ * cpp__perlin_noise_v2.cpp - perlin noise: C++ implementation (optimized)
  *
  */
 
@@ -46,8 +46,6 @@ static float fade(float t) {
     return t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
 }
 
-
-
 /** 
  * @brief Linear interpolation
  * @param a 
@@ -71,10 +69,6 @@ struct Vector2D {
 
     Vector2D(float x_, float y_) : x(x_), y(y_) {}
 
-    Vector2D operator-(const Vector2D& other) const {
-        return {x - other.x, y - other.y};
-    }
-
     float dot(const Vector2D& other) const {
         return x * other.x + y * other.y;
     }
@@ -90,12 +84,10 @@ struct Vector2D {
 };
 
 
-
 // Declaring the global gradients' vectors
 static const Vector2D gradients[] = {
     {1,1}, {-1,1}, {1,-1}, {-1,-1}, {1,0}, {-1,0}, {0,1}, {0,-1}
 };
-
 
 
 /**
@@ -213,7 +205,6 @@ void generate_perlin_noise(const Options& opts) {
     std::string output_filename = opts.output_filename;
     std::string output_format = opts.format;
 
-
     /* randomize from seed */
     srand(seed);
 
@@ -246,7 +237,7 @@ void generate_perlin_noise(const Options& opts) {
     float frequency = base_frequency;
     float amplitude = base_amplitude;
 
-    /* float accumulation accumulator (needed for octaves) */
+    /* accumulator (needed for octaves) */
     std::vector<float> accumulator(width * height, 0.0f);
 
     for (int o = 0; o < octaves; o++) {
