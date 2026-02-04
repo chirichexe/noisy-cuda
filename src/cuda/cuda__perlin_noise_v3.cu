@@ -65,10 +65,6 @@ const float2 gradients[] = {
     {1,1}, {-1,1}, {1,-1}, {-1,-1}, {1,0}, {-1,0}, {0,1}, {0,-1}
 };
 
-// Declaring the permutation table (look-up table) and gradients as constant memory on the device
-//__constant__ float2 d_gradients[8];
-//__constant__ int d_lookUpTable[512];
-
 
 /**
  * @brief CUDA kernel for Perlin noise generation, equivalent to Chunk
@@ -91,6 +87,7 @@ __global__ void perlin_noise_kernel(
     int y = blockIdx.y * blockDim.y + threadIdx.y;
     
     /* loading shared memory for lookup table and gradients */
+    
     __shared__ int shared_lookUpTable[512];
     __shared__ float2 shared_gradients[8];
     
@@ -109,7 +106,7 @@ __global__ void perlin_noise_kernel(
 
     // wait until all copies are done
     __syncthreads();
-
+    
 
     // Boundary check
     if (x >= width || y >= height) return;
@@ -233,7 +230,8 @@ void generate_perlin_noise(const Options& opts) {
     //CHECK(cudaMemcpyToSymbol(d_lookUpTable, lookUpTable.data(), lookUpTable_bytes));
     
     // Configure Shared Memory Carveout before launch
-    //CHECK(cudaFuncSetAttribute(perlin_noise_kernel, cudaFuncAttributePreferredSharedMemoryCarveout, (int)cudaSharedmemCarveoutMaxShared));
+    CHECK(cudaFuncSetAttribute(perlin_noise_kernel, cudaFuncAttributePreferredSharedMemoryCarveout, 
+                                                    cudaSharedmemCarveoutMaxShared));
 
     dim3 blockSize(BLOCK_SIZE, BLOCK_SIZE);
     dim3 gridSize(
