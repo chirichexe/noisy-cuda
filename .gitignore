@@ -6,11 +6,9 @@ noisy_cuda
 build*
 
 # outputs
-*.png
+#*.png
 *.ppm
-*.csv
 *.raw
-tests/outputs/*
 
 ##### Windows
 # Windows thumbnail cache files

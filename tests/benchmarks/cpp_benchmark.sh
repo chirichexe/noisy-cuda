@@ -3,7 +3,7 @@
 # Configuration
 APPS=("./build/cpp/v2/noisy_cuda" "./build/cpp/v1/noisy_cuda")
 RESOLUTIONS="128 983 1838 2694 3549 4404 5260 6115 6970 7826 8681 9536 10392 11247 12102 12958 13813 14668 15524 16384"
-OUTPUT_DIR="./tests/outputs"
+OUTPUT_DIR="./tests/csv/outputs"
 CSV_HEADER="timestamp,width,height,pixels,octaves,frequency,wall_ms,cpu_s,ms_per_pixel,mem_bytes"
 
 # Ensure output directory exists

@@ -18,7 +18,7 @@ A high-performance Perlin noise generator developed for the "Accelerated Process
 
 | Backend | Available Versions | Description                           | Dependencies |
 |---------|--------------------|---------------------------------------|--------------|
-| CUDA    | v1, v2             | It uses  CUDA implementation          | CUDA         |
+| CUDA    | v1, v2, v3         | It uses  CUDA implementation          | CUDA         |
 | SIMD    | v1                 | It uses SIMD instructions for ISA x86 | SSE4         |
 | CPP     | v1, v2             | It is the naive C++ Implementation    | C++ compiler |
 
@@ -73,7 +73,7 @@ Usage: `./perlin [seed] [OPTIONS]`
 - `RAW`: Raw binary data
 - `CSV`: Comma-separated values
 
-## Benchmarking 
+## Benchmarking notes 
 
 If the `--benchmark` flag is set, the program will output benchmark data in CSV format to standard output, that includes:
 
@@ -83,21 +83,44 @@ timestamp,width,height,pixels,octaves,frequency,wall_ms,cpu_s,ms_per_pixel,mem_b
 
 ## Let's test it!
 
+- All the output .csv files is in the directory `/tests/benchmarks/outputs/csv`. 
+
+- The *Nsight Compute* outputs are in `/tests/benchmarks/outputs/cuda`. 
+
+> **Note**: Ensure you have built the backend to test before running the benchmark tests. If you have compiled the project in a different build directory, adjust the script accordingly.
+
+### C++: v1 vs. v2
+
 To run the C++ benchmark test in v1 and v2, use the following command:
- 
-### Test 1: C++ v1 vs. v2
 
 ```sh
 ./tests/benchmarks/cpp_benchmark.sh
 ```
 
-> **Note**: Ensure you have built the C++ backend before running the benchmark test. If you have compiled the project in a different build directory, adjust the script accordingly.
+### Cuda: GPU timer
 
-### Start CUDA Nsight Compute profiling
+Incremental size of matrix, grouped by incremental number of octaves:
 
 ```sh
-ncu -o cuda --target-processes all --set full ./build/cuda/noisy_cuda
+# Example: Test CUDA version 3
+./tests/benchmarks/cuda_benchmark.sh 3
 ```
+
+### Cuda: Nsight compute profiling
+
+You need **NVIDIA Nsight Compute**, typically installed with the CUDA Toolkit. Installation (Arch Linux example): `sudo pacman -S nsight-compute`
+> The profiling script uses `sudo` due to the need to access low-level GPU hardware counters. This is strongly discouraged for security reasons. Instead, ensure your user has the necessary permissions to access the device for profiling without `sudo`.
+
+Use the provided script, supplying the integer version of the CUDA code to be tested.
+
+```bash
+# Example: Profile CUDA version 3
+./tests/start-cuda-profiling-test.sh 3
+```
+
+## Plotting
+
+- All the plotting Python scripts are in the directory `/tests/benchmarks/plots`. I was bored documenting them, feel free to explore and expand ;)
 
 # Examples
 
@@ -107,55 +130,44 @@ The output images are located in `docs/examples/png/`.
 <table>
 <tr>
   <td align="center">
-    <img src="docs/examples/png/terrain_1.png" width="200"><br>
+    <img src="docs/examples/png/perlin_A1_F5_C1.png" width="200"><br>
     <br>
-    Freq: 1.0<br>
+    Freq: 5.0<br>
     Amp: 1.0<br>
     Lac: 2.0<br>
     Pers: 0.5<br>
-    Octaves: 4
+    Octaves: 1
   </td>
   <td align="center">
-    <img src="docs/examples/png/terrain_2.png" width="200"><br>
+    <img src="docs/examples/png/perlin_A1_F5_C3.png" width="200"><br>
     <br>
-    Freq: 2.0<br>
-    Amp: 1.0<br>
-    Lac: 2.5<br>
-    Pers: 0.6<br>
-    Octaves: 5
-  </td>
-  <td align="center">
-    <img src="docs/examples/png/terrain_3.png" width="200"><br>
-    <br>
-    Freq: 4.0<br>
+    Freq: 5.0<br>
     Amp: 1.0<br>
     Lac: 2.0<br>
-    Pers: 0.7<br>
+    Pers: 0.5<br>
+    Octaves: 3
+  </td>
+  <td align="center">
+    <img src="docs/examples/png/perlin_A1_F10_C6.png" width="200"><br>
+    <br>
+    Freq: 10.0<br>
+    Amp: 1.0<br>
+    Lac: 2.0<br>
+    Pers: 0.5<br>
     Octaves: 6
   </td>
   <td align="center">
-    <img src="docs/examples/png/terrain_4.png" width="200"><br>
+    <img src="docs/examples/png/perlin_A2_F10_C6.png" width="200"><br>
     <br>
-    Freq: 0.5<br>
-    Amp: 1.0<br>
+    Freq: 10.0<br>
+    Amp: 2.0<br>
     Lac: 2.0<br>
-    Pers: 0.4<br>
-    Octaves: 3
+    Pers: 0.5<br>
+    Octaves: 6
   </td>
 </tr>
 </table>
 
-# Profiling
-
-You need **NVIDIA Nsight Compute**, typically installed with the CUDA Toolkit. Installation (Arch Linux example): `sudo pacman -S nsight-compute`
-> The profiling script uses `sudo` due to the need to access low-level GPU hardware counters. This is strongly discouraged for security reasons. Instead, ensure your user has the necessary permissions to access the device for profiling without `sudo`.
-
-Use the provided script, supplying the integer version of the CUDA code to be tested.
-
-```bash
-# Example: Profile CUDA version 3
-./tests/start-cuda-profiling-test.sh 2
-```
 
 ## License
 

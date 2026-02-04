@@ -50,7 +50,7 @@ def main():
     # Calcolo rapido dello speedup medio
     if len(df1) == len(df2):
         avg_speedup = (df1['cpu_s'].mean() / df2['cpu_s'].mean())
-        print(f"🚀 Speedup medio calcolato: {avg_speedup:.2f}x")
+        print(f"Speedup medio calcolato: {avg_speedup:.2f}x")
 
     plt.show()
 

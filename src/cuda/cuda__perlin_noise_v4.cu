@@ -224,7 +224,7 @@ void generate_perlin_noise(const Options& opts) {
     CHECK(cudaMemcpyToSymbol(d_lookUpTable, lookUpTable.data(), lookUpTable_bytes));
     
     // Configure Shared Memory Carveout before launch
-    CHECK(cudaFuncSetAttribute(perlin_noise_kernel, cudaFuncAttributePreferredSharedMemoryCarveout, (int)cudaSharedmemCarveoutMaxShared));
+    //CHECK(cudaFuncSetAttribute(perlin_noise_kernel, cudaFuncAttributePreferredSharedMemoryCarveout, (int)cudaSharedmemCarveoutMaxShared));
 
     dim3 blockSize(BLOCK_SIZE, BLOCK_SIZE);
     dim3 gridSize(
