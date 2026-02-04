@@ -12,7 +12,7 @@ VERSION="$1"
 APP="./build/cuda/v${VERSION}/noisy_cuda"
 RESOLUTIONS="512 1024 2048 4096 8192 16384 "
 OCTAVES="1 2 4 16 32 64 128" 
-OUTPUT_DIR="./tests/outputs"
+OUTPUT_DIR="./tests/outputs/csv"
 OUTPUT_FILE="${OUTPUT_DIR}/cuda_v${VERSION}_output.csv"
 CSV_HEADER="timestamp,width,height,pixels,octaves,frequency,wall_ms,gpu_s,ms_per_pixel,mem_bytes"
 

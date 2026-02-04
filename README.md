@@ -1,11 +1,28 @@
-# noisy-cuda
+<div align="center">
 
-![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)
-![Platform](https://img.shields.io/badge/Platform-CPU%2FCUDA-green.svg)
-![Output](https://img.shields.io/badge/Output-PNG%2FRAW%2FCSV%2FPPM-orange.svg)
-![University](https://img.shields.io/badge/UniBO-Alma%20Mater%20Studiorum-lightgrey.svg)
+  ![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)
+  ![University](https://img.shields.io/badge/Unibo-Alma%20Mater%20Studiorum-red.svg)
+  ![Contributors](https://img.shields.io/github/contributors/chirichexe/noisy-cuda)
+  ![Issues](https://img.shields.io/github/issues/chirichexe/noisy-cuda)
+  ![Stars](https://img.shields.io/github/stars/chirichexe/noisy-cuda)
+  ![Forks](https://img.shields.io/github/forks/chirichexe/noisy-cuda)
+  <br/>
+  ![cpp](https://img.shields.io/badge/C%2B%2B-%2300599C.svg?logo=c%2B%2B&logoColor=white)
+  ![nvidia-shield](https://img.shields.io/badge/nVIDIA-%2376B900.svg?logo=nVIDIA&logoColor=white)
+  ![cmake](https://img.shields.io/badge/CMake-%230078D4.svg?logo=cmake&logoColor=white)
 
+```
+              .__                                         .___       
+  ____   ____ |__| _________.__.           ____  __ __  __| _/____   
+ /    \ /  _ \|  |/  ___<   |  |  ______ _/ ___\|  |  \/ __ |\__  \  
+|   |  (  <_> )  |\___ \ \___  | /_____/ \  \___|  |  / /_/ | / __ \_
+|___|  /\____/|__/____  >/ ____|          \___  >____/\____ |(____  /
+     \/               \/ \/                   \/           \/     \/ 
+```
 A high-performance Perlin noise generator developed for the "Accelerated Processing Systems - M" course at University of Bologna, with the professors **Stefano Mattoccia** and **Fabio Tosi**.
+</div>
+
+
 
 ## Features
 
