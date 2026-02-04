@@ -95,9 +95,11 @@ const Vector2D gradients[] = {
 };
 
 // Declaring the permutation table (look-up table) and gradients as constant memory on the device
-__constant__ Vector2D d_gradients[8];
+// not a good idea, as the test shows...
 
-__constant__ int d_lookUpTable[512];
+// __constant__ Vector2D d_gradients[8];
+
+// __constant__ int d_lookUpTable[512];
 
 
 /**
@@ -113,6 +115,8 @@ __global__ void perlin_noise_kernel(
     float persistence,
     int offset_x,
     int offset_y,
+    Vector2D* d_gradients, 
+    int* d_lookUpTable, 
     float* d_accumulator
 ) {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -252,17 +256,32 @@ void generate_perlin_noise(const Options& opts) {
     
     /* copy lookup table, gradients and accumulator to device */
     float* d_accumulator;
-    
-    size_t gradients_bytes = 8 * sizeof(Vector2D);
-    size_t lookUpTable_bytes = 512 * sizeof(int);
     size_t accumulator_bytes = width * height * sizeof(float);
 
     CHECK(cudaMalloc(&d_accumulator, accumulator_bytes ));
     CHECK(cudaMemcpy(d_accumulator, accumulator.data(), accumulator_bytes, cudaMemcpyHostToDevice));
     
-    CHECK(cudaMemcpyToSymbol(d_gradients, gradients, gradients_bytes));
-    CHECK(cudaMemcpyToSymbol(d_lookUpTable, lookUpTable.data(), lookUpTable_bytes));
+    // copying to constant memory is not a good idea, as the test shows...
+
+    //CHECK(cudaMemcpyToSymbol(d_gradients, gradients, gradients_bytes));
+    //CHECK(cudaMemcpyToSymbol(d_lookUpTable, lookUpTable.data(), lookUpTable_bytes));
+
+    // so, rollback to global memory for the look-up table and gradients
+    // (for now...)
+    int* d_lookUpTable;
+    Vector2D* d_gradients;
+
+    size_t lookUpTable_bytes = 512 * sizeof(int);
+    size_t gradients_bytes = 8 * sizeof(Vector2D);
     
+    CHECK(cudaMalloc(&d_lookUpTable, lookUpTable_bytes));
+    CHECK(cudaMalloc(&d_gradients, gradients_bytes ));
+    
+    CHECK(cudaMemcpy(d_lookUpTable, lookUpTable.data(), lookUpTable_bytes, cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpy(d_gradients, gradients, gradients_bytes, cudaMemcpyHostToDevice ));
+    
+
+
     // Configure kernel launch parameters
     dim3 blockSize(BLOCK_SIZE, BLOCK_SIZE);
     dim3 gridSize(
@@ -281,6 +300,8 @@ void generate_perlin_noise(const Options& opts) {
         persistence,
         offset_x,
         offset_y,
+        d_gradients, 
+        d_lookUpTable, 
         d_accumulator
     );
         
