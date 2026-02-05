@@ -78,28 +78,19 @@ struct Vector2D {
         return x * other.x + y * other.y;
     }
 
-    __host__ __device__ float length() const {
-        return std::sqrt(x * x + y * y);
-    }
-
-    __host__ __device__ Vector2D normalize() const {
-        float len = length();
-        return len > 0 ? Vector2D(x / len, y / len) : Vector2D(0, 0);
-    }
 };
 
 
 // Declaring the global gradients' vectors
-const Vector2D gradients[] = {
+Vector2D gradients[] = {
     {1,1}, {-1,1}, {1,-1}, {-1,-1}, {1,0}, {-1,0}, {0,1}, {0,-1}
 };
 
 // Declaring the permutation table (look-up table) and gradients as constant memory on the device
-// not a good idea, as the test shows...
-
-// __constant__ Vector2D d_gradients[8];
-
-// __constant__ int d_lookUpTable[512];
+// NOTE: according to the tests, it's the best approach 
+// despite the access are not broadcasted to all threads in the warp
+__constant__ Vector2D d_gradients[8];
+__constant__ int d_lookUpTable[512];
 
 
 /**
@@ -115,12 +106,33 @@ __global__ void perlin_noise_kernel(
     float persistence,
     int offset_x,
     int offset_y,
-    Vector2D* d_gradients, 
-    int* d_lookUpTable, 
+    //Vector2D* d_gradients, 
+    //int* d_lookUpTable, 
     float* d_accumulator
 ) {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    /* test section */
+    // LOOKUP TABLE
+    // 2) shared memory 
+    // - not the most efficient approach, the access pattern is not coalesced 
+    /*
+    __shared__ int shared_lookUpTable[512];
+    
+    int tid = threadIdx.y * blockDim.x + threadIdx.x;
+    int threads_per_block = blockDim.x * blockDim.y;
+    
+    // Load lookup table
+    for (int i = tid; i < 512; i += threads_per_block) {
+        shared_lookUpTable[i] = d_lookUpTable[i];
+    }
+    
+    // wait until all copies are done
+    __syncthreads();
+    
+    */
+
 
     if (x >= width || y >= height) return;
 
@@ -134,7 +146,6 @@ __global__ void perlin_noise_kernel(
     // Accumulate noise value over octaves
     float total_value = 0.0f;
 
-    //#pragma unroll
     for (int o = 0; o < octaves; o++) {
         
         float noise_x = ((float)(x + offset_x) / max_dimension) * frequency;
@@ -254,33 +265,42 @@ void generate_perlin_noise(const Options& opts) {
     /* accumulator host (needed for octaves) */
     std::vector<float> accumulator(width * height, 0.0f);
     
-    /* copy lookup table, gradients and accumulator to device */
+    /* copy accumulator to device */
     float* d_accumulator;
     size_t accumulator_bytes = width * height * sizeof(float);
 
     CHECK(cudaMalloc(&d_accumulator, accumulator_bytes ));
     CHECK(cudaMemcpy(d_accumulator, accumulator.data(), accumulator_bytes, cudaMemcpyHostToDevice));
     
-    // copying to constant memory is not a good idea, as the test shows...
-
-    //CHECK(cudaMemcpyToSymbol(d_gradients, gradients, gradients_bytes));
-    //CHECK(cudaMemcpyToSymbol(d_lookUpTable, lookUpTable.data(), lookUpTable_bytes));
-
-    // so, rollback to global memory for the look-up table and gradients
-    // (for now...)
+    /* test section */
+    // LOOKUP TABLE
+    // 1) global memory
+    /*
     int* d_lookUpTable;
-    Vector2D* d_gradients;
-
     size_t lookUpTable_bytes = 512 * sizeof(int);
-    size_t gradients_bytes = 8 * sizeof(Vector2D);
-    
     CHECK(cudaMalloc(&d_lookUpTable, lookUpTable_bytes));
-    CHECK(cudaMalloc(&d_gradients, gradients_bytes ));
-    
     CHECK(cudaMemcpy(d_lookUpTable, lookUpTable.data(), lookUpTable_bytes, cudaMemcpyHostToDevice));
-    CHECK(cudaMemcpy(d_gradients, gradients, gradients_bytes, cudaMemcpyHostToDevice ));
+    */
     
+    // 2) shared memory 
 
+    // 3) constant memory
+    size_t lookUpTable_bytes = 512 * sizeof(int);
+    CHECK(cudaMemcpyToSymbol(d_lookUpTable, lookUpTable.data(), lookUpTable_bytes));
+
+    // GRADIENTS
+    // 1) global memory
+    /*
+    Vector2D* d_gradients;
+    size_t gradients_bytes = 8 * sizeof(Vector2D);
+    CHECK(cudaMalloc(&d_gradients, gradients_bytes ));
+    CHECK(cudaMemcpy(d_gradients, gradients, gradients_bytes, cudaMemcpyHostToDevice ));
+    */
+    
+    // 2) constant memory
+    //Vector2D* d_gradients;
+    size_t gradients_bytes = 8 * sizeof(Vector2D);
+    CHECK(cudaMemcpyToSymbol(d_gradients, gradients, gradients_bytes));
 
     // Configure kernel launch parameters
     dim3 blockSize(BLOCK_SIZE, BLOCK_SIZE);
@@ -300,8 +320,8 @@ void generate_perlin_noise(const Options& opts) {
         persistence,
         offset_x,
         offset_y,
-        d_gradients, 
-        d_lookUpTable, 
+        //d_gradients, 
+        //d_lookUpTable, 
         d_accumulator
     );
         

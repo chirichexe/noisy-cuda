@@ -79,14 +79,6 @@ struct Vector2D {
         return x * other.x + y * other.y;
     }
 
-    __host__ __device__ float length() const {
-        return std::sqrt(x * x + y * y);
-    }
-
-    __host__ __device__ Vector2D normalize() const {
-        float len = length();
-        return len > 0 ? Vector2D(x / len, y / len) : Vector2D(0, 0);
-    }
 };
 
 
