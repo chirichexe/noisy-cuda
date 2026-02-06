@@ -11,7 +11,7 @@ fi
 CUDA_VERSION_INT=$1
 CUDA_VERSION="v${CUDA_VERSION_INT}"
 BUILD_DIR="build/cuda"
-OUTPUT_DIR="tests/outputs/cuda"
+OUTPUT_DIR="tests/outputs/cuda-ncu"
 
 REPORT_FILE="${OUTPUT_DIR}/noisy-cuda-test-${CUDA_VERSION}.ncu-rep"
 
