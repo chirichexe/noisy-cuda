@@ -9,6 +9,9 @@ build*
 #*.png
 *.ppm
 *.raw
+screenshots/*
+plots/*
+notes.md
 
 ##### Windows
 # Windows thumbnail cache files
