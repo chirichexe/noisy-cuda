@@ -87,8 +87,6 @@ Vector2D gradients[] = {
 };
 
 // Declaring the permutation table (look-up table) and gradients as constant memory on the device
-// NOTE: according to the tests, it's the best approach 
-// despite the access are not broadcasted to all threads in the warp
 __constant__ Vector2D d_gradients[8];
 __constant__ int d_lookUpTable[512];
 

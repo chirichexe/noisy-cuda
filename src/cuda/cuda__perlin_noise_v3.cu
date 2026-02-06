@@ -1,5 +1,5 @@
 /*
- * cuda__perlin_noise_v3.cu - optimized computation
+ * cuda__perlin_noise_v3.cu - optimized computation with shared memory (LUT + Gradients)
  *
  */
 
@@ -73,9 +73,6 @@ float2 gradients[] = {
     {1,1}, {-1,1}, {1,-1}, {-1,-1}, {1,0}, {-1,0}, {0,1}, {0,-1}
 };
 
-// Declaring the permutation table (look-up table) and gradients as constant memory on the device
-// NOTE: according to the tests, it's the best approach 
-// despite the access are not broadcasted to all threads in the warp
 __constant__ float2 d_gradients[8];
 __constant__ int d_lookUpTable[512];
 
@@ -94,16 +91,37 @@ __global__ void perlin_noise_kernel(
     int offset_y,
     float* d_accumulator
 ) {
+    
+    /* SHARED MEMORY for permutation table and gradients */
+    __shared__ int s_lookUpTable[512];
+    __shared__ float2 s_gradients[8];
+
+    int tid = threadIdx.y * blockDim.x + threadIdx.x;
+    int threads_per_block = blockDim.x * blockDim.y;
+    
+    // Cooperative loading of the LUT (512 elements)
+    for (int i = tid; i < 512; i += threads_per_block) {
+        s_lookUpTable[i] = d_lookUpTable[i];
+    }
+
+    // Cooperative loading of the Gradients (8 elements)
+    if (tid < 8) {
+        s_gradients[tid] = d_gradients[tid];
+    }
+
+    // synchronization before computation
+    __syncthreads();
+
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
 
-
+    // Boundary check
     if (x >= width || y >= height) return;
 
     // Get the pixel global coordinates with:
     // - offset
     // - frequency scaling (aspect ratio to 1:1)
-    float max_dimension = fmaxf((float)width, (float)height);
+    float inv_max_dimension = 1.0f / fmaxf((float)width, (float)height);
     float frequency = base_frequency;
     float amplitude = base_amplitude;
 
@@ -113,8 +131,8 @@ __global__ void perlin_noise_kernel(
     #pragma unroll // octave loop is not definable at compile time...
     for (int o = 0; o < octaves; o++) {
         
-        float noise_x = ((float)(x + offset_x) / max_dimension) * frequency;
-        float noise_y = ((float)(y + offset_y) / max_dimension) * frequency;
+        float noise_x = ((float)(x + offset_x) * inv_max_dimension) * frequency;
+        float noise_y = ((float)(y + offset_y) * inv_max_dimension) * frequency;
     
         // Determine the integer coordinates of the cell
         // (grid square) that contains this point
@@ -131,16 +149,16 @@ __global__ void perlin_noise_kernel(
         int yi = (int)cell_top  & 255;
     
         // Use the permutation table to get pseudo-random gradient indices at the four corners of the cell
-        int grad_index_top_left     = d_lookUpTable[ d_lookUpTable[xi]     + yi] & 7;
-        int grad_index_top_right    = d_lookUpTable[ d_lookUpTable[xi + 1] + yi] & 7;
-        int grad_index_bottom_left  = d_lookUpTable[ d_lookUpTable[xi]     + yi + 1] & 7;
-        int grad_index_bottom_right = d_lookUpTable[ d_lookUpTable[xi + 1] + yi + 1] & 7;
+        int gi_tl = s_lookUpTable[ s_lookUpTable[xi]     + yi] & 7;
+        int gi_tr = s_lookUpTable[ s_lookUpTable[xi + 1] + yi] & 7;
+        int gi_bl = s_lookUpTable[ s_lookUpTable[xi]     + yi + 1] & 7;
+        int gi_br = s_lookUpTable[ s_lookUpTable[xi + 1] + yi + 1] & 7;
     
         // Select the gradient vectors corresponding to these indices
-        float2 grad_top_left     = d_gradients[grad_index_top_left];
-        float2 grad_top_right    = d_gradients[grad_index_top_right];
-        float2 grad_bottom_left  = d_gradients[grad_index_bottom_left];
-        float2 grad_bottom_right = d_gradients[grad_index_bottom_right];
+        float2 grad_top_left     = s_gradients[gi_tl];
+        float2 grad_top_right    = s_gradients[gi_tr];
+        float2 grad_bottom_left  = s_gradients[gi_bl];
+        float2 grad_bottom_right = s_gradients[gi_br];
     
         // Compute vectors from each corner of the cell to the pixel's location
         float2 dist_to_top_left     = make_float2(local_x,        local_y);
@@ -266,6 +284,7 @@ void generate_perlin_noise(const Options& opts) {
         offset_y,
         d_accumulator
     );
+        
         
     CHECK(cudaGetLastError());
     CHECK(cudaDeviceSynchronize());
