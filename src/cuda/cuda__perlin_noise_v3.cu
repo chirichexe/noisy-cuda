@@ -35,6 +35,7 @@
 #include <fstream>
 #include <cuda_runtime.h>
 #include <cmath>
+#include <cuda_fp16.h>
 
 
 /* chunk variables, CUDA adapted */
@@ -89,7 +90,7 @@ __global__ void perlin_noise_kernel(
     float persistence,
     int offset_x,
     int offset_y,
-    float* d_accumulator
+    half* d_accumulator
 ) {
     
     /* SHARED MEMORY for permutation table and gradients */
@@ -194,7 +195,7 @@ __global__ void perlin_noise_kernel(
     }
 
     // Accumulate the computed noise into the output array, scaling by the amplitude
-    d_accumulator[y * width + x] = total_value;
+    d_accumulator[y * width + x] = __float2half(total_value);
 }
 
 void generate_perlin_noise(const Options& opts) {
@@ -252,8 +253,8 @@ void generate_perlin_noise(const Options& opts) {
     std::vector<float> accumulator(width * height, 0.0f);
     
     /* copy accumulator to device */
-    float* d_accumulator;
-    size_t accumulator_bytes = width * height * sizeof(float);
+    half* d_accumulator;
+    size_t accumulator_bytes = width * height * sizeof(half);
     
     CHECK(cudaMalloc(&d_accumulator, accumulator_bytes ));
     CHECK(cudaMemcpy(d_accumulator, accumulator.data(), accumulator_bytes, cudaMemcpyHostToDevice));
